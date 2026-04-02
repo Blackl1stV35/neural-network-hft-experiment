@@ -1,0 +1,48 @@
+name: xauusd
+symbol: XAUUSD
+timeframe: M1
+
+source:
+  type: mt5  # mt5 | csv | duckdb
+  csv_path: null
+  duckdb_path: data/ticks.duckdb
+
+preprocessing:
+  scaling: window_minmax  # window_minmax | zscore | robust
+  window_size: 120
+  fill_gaps: forward_fill
+  remove_weekends: true
+  session_filter: null  # null = all sessions, or "london" | "newyork" | "asian"
+
+features:
+  price: [open, high, low, close]
+  volume: true
+  spread: true
+  ta_indicators:
+    - rsi_14
+    - bb_20_2
+    - atr_14
+    - ema_9
+    - ema_21
+    - macd_12_26_9
+    - adx_14
+    - stoch_14_3
+    - vwap
+    - obv
+
+sentiment:
+  enabled: true
+  model: ProsusAI/finbert
+  sources:
+    - newsapi
+  update_interval: 900  # seconds (15 min)
+  cache_dir: data/sentiment_cache
+  embedding_dim: 768
+  use_hidden_states: true  # use intermediate layers, not just labels
+
+labeling:
+  method: triple_barrier
+  profit_target_pips: 10
+  stop_loss_pips: 5
+  max_holding_minutes: 60
+  classes: [sell, hold, buy]  # mapped to [0, 1, 2]

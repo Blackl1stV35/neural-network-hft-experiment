@@ -1,0 +1,28 @@
+name: cnn_lstm
+type: cnn_lstm
+
+cnn:
+  in_channels: 1
+  channels: [32, 64, 128]
+  kernel_sizes: [3, 3, 3]
+  dropout: 0.2
+
+lstm:
+  hidden_size: 128
+  num_layers: 2
+  dropout: 0.3
+  bidirectional: false
+
+attention:
+  type: temporal
+  heads: 4
+  dim: 128
+
+classifier:
+  hidden_dims: [64, 32]
+  output_dim: 3  # buy, hold, sell
+  dropout: 0.3
+
+input:
+  sequence_length: 120  # 120 M1 candles = 2 hours
+  feature_dim: 6  # OHLCV + spread

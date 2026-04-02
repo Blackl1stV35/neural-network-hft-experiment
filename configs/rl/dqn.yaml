@@ -1,0 +1,31 @@
+name: dqn
+type: dqn
+
+agent:
+  gamma: 0.99
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 50_000
+  lr: 1e-4
+  hidden_dims: [256, 256]
+  batch_size: 128
+  target_update_freq: 1000
+  double_dqn: true
+  dueling: true
+
+replay_buffer:
+  capacity: 500_000
+  min_size: 5_000
+  priority: true  # prioritized experience replay
+  alpha: 0.6
+  beta_start: 0.4
+  beta_frames: 100_000
+
+training:
+  total_steps: 300_000
+  eval_every: 5_000
+
+reward:
+  profit_weight: 1.0
+  risk_penalty: 0.5
+  slippage_model: true

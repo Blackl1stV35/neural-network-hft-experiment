@@ -1,0 +1,30 @@
+name: mamba_ssm
+type: mamba_ssm
+
+mamba:
+  d_model: 128
+  n_layers: 4
+  d_state: 16
+  d_conv: 4
+  expand_factor: 2
+  dropout: 0.1
+
+tcn:
+  channels: [64, 128]
+  kernel_size: 3
+  dropout: 0.2
+
+fusion:
+  method: concat_project  # concat_project | gated | attention
+  hidden_dim: 256
+  sentiment_dim: 768  # FinBERT hidden size
+  ta_dim: 12  # number of TA indicators
+
+classifier:
+  hidden_dims: [128, 64]
+  output_dim: 3
+  dropout: 0.3
+
+input:
+  sequence_length: 240  # longer horizon thanks to linear scaling
+  feature_dim: 6

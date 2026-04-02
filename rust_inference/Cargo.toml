@@ -1,0 +1,29 @@
+[package]
+name = "xauusd-inference"
+version = "0.1.0"
+edition = "2021"
+description = "Low-latency ONNX inference engine for XAUUSD trading"
+
+[dependencies]
+ort = { version = "2.0", features = ["load-dynamic"] }
+ndarray = "0.16"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[lib]
+name = "xauusd_inference"
+crate-type = ["cdylib", "rlib"]
+
+# PyO3 bridge (optional, enable for Python integration)
+# [dependencies.pyo3]
+# version = "0.21"
+# features = ["extension-module"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+target-cpu = "native"

@@ -1,0 +1,73 @@
+{
+  "dashboard": {
+    "title": "XAUUSD Trading Bot",
+    "description": "Real-time monitoring dashboard for the NN-based trading system",
+    "panels": [
+      {
+        "title": "Account Balance",
+        "type": "stat",
+        "targets": [{"expr": "trading_account_balance"}],
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "title": "Daily PnL",
+        "type": "stat",
+        "targets": [{"expr": "trading_pnl_daily"}],
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "title": "Current Position",
+        "type": "stat",
+        "targets": [{"expr": "trading_position"}],
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+      },
+      {
+        "title": "Model Uncertainty",
+        "type": "gauge",
+        "targets": [{"expr": "trading_model_uncertainty"}],
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "title": "Equity Curve",
+        "type": "timeseries",
+        "targets": [{"expr": "trading_account_balance"}],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+      },
+      {
+        "title": "Inference Latency (ms)",
+        "type": "timeseries",
+        "targets": [
+          {"expr": "histogram_quantile(0.50, trading_inference_latency_ms_bucket)", "legendFormat": "p50"},
+          {"expr": "histogram_quantile(0.95, trading_inference_latency_ms_bucket)", "legendFormat": "p95"},
+          {"expr": "histogram_quantile(0.99, trading_inference_latency_ms_bucket)", "legendFormat": "p99"}
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+      },
+      {
+        "title": "Trade Count",
+        "type": "stat",
+        "targets": [{"expr": "trading_trades_total"}],
+        "gridPos": {"h": 4, "w": 8, "x": 0, "y": 12}
+      },
+      {
+        "title": "Circuit Breaker Halts",
+        "type": "stat",
+        "targets": [{"expr": "trading_circuit_breaker_halts"}],
+        "gridPos": {"h": 4, "w": 8, "x": 8, "y": 12}
+      },
+      {
+        "title": "Market Regime",
+        "type": "timeseries",
+        "targets": [
+          {"expr": "trading_regime{regime_name='trending_up'}", "legendFormat": "Trending Up"},
+          {"expr": "trading_regime{regime_name='trending_down'}", "legendFormat": "Trending Down"},
+          {"expr": "trading_regime{regime_name='ranging'}", "legendFormat": "Ranging"},
+          {"expr": "trading_regime{regime_name='volatile'}", "legendFormat": "Volatile"}
+        ],
+        "gridPos": {"h": 4, "w": 8, "x": 16, "y": 12}
+      }
+    ],
+    "refresh": "10s",
+    "time": {"from": "now-6h", "to": "now"}
+  }
+}

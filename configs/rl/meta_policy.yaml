@@ -1,0 +1,44 @@
+name: meta_policy
+type: hierarchical
+
+regime_classifier:
+  model: gradient_boosting  # supervised classifier trained first
+  features: [volatility_20, trend_strength, volume_profile, spread_mean]
+  n_regimes: 4  # trending_up, trending_down, ranging, volatile
+  retrain_interval: 168  # hours (weekly)
+
+meta_agent:
+  type: learned  # rule_based | learned
+  # rule_based: use regime classifier output directly
+  # learned: train meta-agent to select expert policies
+  lr: 1e-4
+  switch_penalty: 0.01  # penalize frequent policy switching
+  min_hold_steps: 10  # minimum steps before allowing policy switch
+
+experts:
+  scalper:
+    type: sac
+    regime: ranging
+    max_position_time: 30  # minutes
+    take_profit_pips: 5
+    stop_loss_pips: 3
+
+  trend_follower:
+    type: sac
+    regime: trending
+    max_position_time: 480
+    take_profit_pips: 30
+    stop_loss_pips: 10
+
+  mean_reverter:
+    type: dqn
+    regime: ranging
+    max_position_time: 120
+    take_profit_pips: 10
+    stop_loss_pips: 5
+
+  defensive:
+    type: rule_based
+    regime: volatile
+    action: reduce_exposure
+    max_position_pct: 0.25

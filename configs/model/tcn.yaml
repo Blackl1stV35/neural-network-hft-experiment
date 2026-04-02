@@ -1,0 +1,17 @@
+name: tcn
+type: tcn
+
+tcn:
+  in_channels: 6
+  channels: [64, 64, 128, 128, 256]
+  kernel_size: 3
+  dropout: 0.2
+
+classifier:
+  hidden_dims: [128, 64]
+  output_dim: 3
+  dropout: 0.3
+
+input:
+  sequence_length: 120
+  feature_dim: 6
