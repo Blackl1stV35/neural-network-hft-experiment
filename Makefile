@@ -30,6 +30,16 @@ data-synthetic:
 data-mt5:
 	python scripts/download_data.py --symbol XAUUSD --timeframe M1 --days 365
 
+# FT.com sentiment data
+scrape-ft:
+	python scripts/scrape_ft.py --start 2024-01 --min-relevance 0.01
+
+scrape-ft-full:
+	python scripts/scrape_ft.py --start 2020-01 --min-relevance 0.005
+
+build-embeddings:
+	python scripts/scrape_ft.py --build-embeddings --data-dir data
+
 # Training
 train-baseline:
 	python scripts/train.py model=cnn_lstm data=xauusd

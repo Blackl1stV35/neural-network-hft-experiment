@@ -1,11 +1,21 @@
-"""Sentiment pipeline: news fetching, FinBERT embedding extraction."""
+"""Sentiment pipeline: FT.com (training) + GDELT (live) → FinBERT embeddings.
+
+Architecture:
+    TRAINING: FT.com sitemaps → cached articles → FinBERT → embeddings aligned to bars
+    LIVE:     GDELT API (free, no key) → recent headlines → FinBERT → consensus embedding
+
+NewsAPI has been replaced because:
+    - FT.com sitemaps provide deeper historical coverage (1995–present)
+    - GDELT is truly free (no API key, no rate limit tier)
+    - Both provide higher quality financial content than NewsAPI free tier
+"""
 
 from __future__ import annotations
 
 import json
 import os
-import time
 import hashlib
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -15,87 +25,129 @@ import requests
 from loguru import logger
 
 
-class NewsAPIFetcher:
-    """Fetch gold/forex related news from NewsAPI (free tier: 100 req/day)."""
+# =====================================================================
+# GDELT: Free real-time news API (for LIVE inference)
+# =====================================================================
 
-    BASE_URL = "https://newsapi.org/v2/everything"
-    GOLD_KEYWORDS = [
-        "gold price", "XAUUSD", "gold futures", "precious metals",
-        "Federal Reserve", "FOMC", "inflation", "treasury yields",
-        "dollar index", "DXY", "safe haven", "gold market",
+class GDELTFetcher:
+    """Fetch gold/macro news from GDELT DOC API.
+
+    GDELT is completely free — no API key, no rate limits for reasonable usage.
+    Returns structured article metadata with titles and URLs.
+
+    Docs: https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/
+    """
+
+    BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
+
+    # Queries optimized for gold/macro news
+    QUERIES = [
+        "gold price OR gold market OR XAUUSD OR bullion",
+        "Federal Reserve OR FOMC OR interest rate decision",
+        "inflation CPI OR treasury yield OR dollar index",
     ]
 
-    def __init__(self, api_key: Optional[str] = None, cache_dir: str = "data/sentiment_cache"):
-        self.api_key = api_key or os.getenv("NEWSAPI_KEY")
+    def __init__(self, cache_dir: str = "data/sentiment_cache"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-        if not self.api_key:
-            logger.warning("NEWSAPI_KEY not set. Sentiment pipeline will use cached data only.")
 
     def fetch(
         self,
         hours_back: int = 24,
-        max_articles: int = 20,
+        max_articles: int = 30,
+        query_override: Optional[str] = None,
     ) -> list[dict]:
-        """Fetch recent news articles about gold/forex."""
-        if not self.api_key:
-            return self._load_cache()
+        """Fetch recent news articles from GDELT.
 
-        query = " OR ".join(f'"{kw}"' for kw in self.GOLD_KEYWORDS[:5])
-        from_date = (datetime.utcnow() - timedelta(hours=hours_back)).strftime("%Y-%m-%dT%H:%M:%S")
+        Args:
+            hours_back: How far back to search.
+            max_articles: Maximum articles to return.
+            query_override: Custom query string (overrides defaults).
 
-        try:
-            resp = requests.get(
-                self.BASE_URL,
-                params={
-                    "q": query,
-                    "from": from_date,
-                    "sortBy": "publishedAt",
-                    "language": "en",
-                    "pageSize": max_articles,
-                    "apiKey": self.api_key,
-                },
-                timeout=10,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            articles = data.get("articles", [])
+        Returns:
+            List of {"text": str, "source": str, "published_at": str, "url": str}
+        """
+        all_articles = []
 
-            # Extract relevant fields
-            processed = []
-            for a in articles:
-                text = f"{a.get('title', '')}. {a.get('description', '')}"
-                processed.append({
-                    "text": text.strip(),
-                    "source": a.get("source", {}).get("name", "unknown"),
-                    "published_at": a.get("publishedAt", ""),
-                    "url": a.get("url", ""),
-                })
+        queries = [query_override] if query_override else self.QUERIES
 
-            self._save_cache(processed)
-            logger.info(f"Fetched {len(processed)} news articles")
-            return processed
+        for query in queries:
+            try:
+                params = {
+                    "query": query,
+                    "mode": "ArtList",
+                    "maxrecords": min(max_articles, 75),
+                    "timespan": f"{hours_back}h",
+                    "format": "json",
+                    "sort": "DateDesc",
+                }
 
-        except Exception as e:
-            logger.warning(f"News fetch failed: {e}. Using cache.")
-            return self._load_cache()
+                resp = requests.get(self.BASE_URL, params=params, timeout=15)
+                if resp.status_code != 200:
+                    logger.warning(f"GDELT returned {resp.status_code} for query: {query[:50]}")
+                    continue
 
-    def _cache_path(self) -> Path:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        return self.cache_dir / f"news_{today}.json"
+                data = resp.json()
+                articles = data.get("articles", [])
+
+                for a in articles:
+                    title = a.get("title", "").strip()
+                    if not title:
+                        continue
+
+                    all_articles.append({
+                        "text": title,
+                        "source": a.get("domain", "unknown"),
+                        "published_at": a.get("seendate", ""),
+                        "url": a.get("url", ""),
+                        "language": a.get("language", "English"),
+                    })
+
+            except Exception as e:
+                logger.warning(f"GDELT fetch failed for query '{query[:40]}': {e}")
+                continue
+
+            # Small delay between queries
+            time.sleep(0.5)
+
+        # Deduplicate by URL
+        seen_urls = set()
+        unique = []
+        for a in all_articles:
+            if a["url"] not in seen_urls:
+                seen_urls.add(a["url"])
+                unique.append(a)
+
+        # Filter to English only
+        unique = [a for a in unique if a.get("language", "").startswith("English")]
+
+        # Sort by recency
+        unique.sort(key=lambda a: a.get("published_at", ""), reverse=True)
+        result = unique[:max_articles]
+
+        # Cache
+        self._save_cache(result)
+        logger.info(f"GDELT: fetched {len(result)} articles (from {len(all_articles)} raw)")
+        return result
 
     def _save_cache(self, articles: list[dict]) -> None:
-        with open(self._cache_path(), "w") as f:
+        today = datetime.utcnow().strftime("%Y-%m-%d_%H")
+        path = self.cache_dir / f"gdelt_{today}.json"
+        with open(path, "w") as f:
             json.dump(articles, f, indent=2)
 
-    def _load_cache(self) -> list[dict]:
-        path = self._cache_path()
-        if path.exists():
-            with open(path) as f:
+    def load_cache(self) -> list[dict]:
+        """Load most recent GDELT cache."""
+        caches = sorted(self.cache_dir.glob("gdelt_*.json"), reverse=True)
+        if caches:
+            with open(caches[0]) as f:
                 return json.load(f)
         return []
 
+
+# =====================================================================
+# FinBERT embedding extractor
+# =====================================================================
 
 class FinBERTSentiment:
     """Extract rich sentiment embeddings from FinBERT.
@@ -178,13 +230,11 @@ class FinBERTSentiment:
                 outputs = self._model(**inputs)
 
                 if use_hidden_states and outputs.hidden_states:
-                    # Mean-pool the chosen hidden layer
                     hidden = outputs.hidden_states[layer]
                     attention_mask = inputs["attention_mask"].unsqueeze(-1)
                     pooled = (hidden * attention_mask).sum(dim=1) / attention_mask.sum(dim=1)
                     embeddings.append(pooled.cpu().numpy())
                 else:
-                    # Use softmax logits
                     logits = torch.softmax(outputs.logits, dim=-1)
                     embeddings.append(logits.cpu().numpy())
 
@@ -198,18 +248,31 @@ class FinBERTSentiment:
         self,
         texts: list[str],
         use_hidden_states: bool = True,
+        weights: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Get a single consensus embedding from multiple news articles.
 
-        Averages all article embeddings into one vector, weighted by recency.
+        Args:
+            texts: List of article texts.
+            use_hidden_states: Use hidden states (768d) or logits (3d).
+            weights: Optional per-article weights (e.g., relevance scores).
+
+        Returns:
+            Single consensus embedding vector.
         """
         if not texts:
             dim = 768 if use_hidden_states else 3
             return np.zeros(dim, dtype=np.float32)
 
         embeddings = self.get_embeddings(texts, use_hidden_states)
-        # Simple average (could add recency weighting later)
-        consensus = embeddings.mean(axis=0)
+
+        if weights is not None:
+            weights = np.array(weights, dtype=np.float32)
+            weights = weights / (weights.sum() + 1e-8)
+            consensus = (embeddings * weights[:, np.newaxis]).sum(axis=0)
+        else:
+            consensus = embeddings.mean(axis=0)
+
         return consensus
 
     def _cache_key(self, texts: list[str], use_hidden: bool, layer: int) -> str:
@@ -227,16 +290,150 @@ class FinBERTSentiment:
         np.save(str(path), arr)
 
 
-class SentimentService:
-    """Orchestrates news fetching + embedding generation on a schedule."""
+# =====================================================================
+# Training sentiment builder: FT.com → time-aligned embeddings
+# =====================================================================
+
+class TrainingSentimentBuilder:
+    """Build time-aligned sentiment embeddings from FT.com article cache.
+
+    For each bar in the training data, looks up articles published within
+    a lookback window and generates a consensus embedding.
+    """
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        ft_cache_dir: str = "data/ft_cache/processed",
         model_device: str = "cpu",
-        update_interval: int = 900,
+        lookback_hours: int = 24,
+        max_articles_per_bar: int = 15,
     ):
-        self.news_fetcher = NewsAPIFetcher(api_key=api_key)
+        self.lookback_hours = lookback_hours
+        self.max_articles = max_articles_per_bar
+        self.sentiment_model = FinBERTSentiment(device=model_device)
+
+        # Load all cached FT articles into memory for fast lookup
+        self._articles: list[dict] = []
+        self._load_ft_cache(ft_cache_dir)
+
+    def _load_ft_cache(self, cache_dir: str) -> None:
+        """Load all FT article cache files."""
+        cache_path = Path(cache_dir)
+        if not cache_path.exists():
+            logger.warning(f"FT cache dir not found: {cache_dir}")
+            return
+
+        for json_file in sorted(cache_path.glob("articles_*.json")):
+            with open(json_file) as f:
+                data = json.load(f)
+                self._articles.extend(data)
+
+        # Parse dates
+        for a in self._articles:
+            try:
+                dt_str = a.get("published_at", "")
+                if dt_str:
+                    a["_parsed_dt"] = datetime.fromisoformat(
+                        dt_str.replace("Z", "+00:00")
+                    ).replace(tzinfo=None)
+                else:
+                    a["_parsed_dt"] = None
+            except ValueError:
+                a["_parsed_dt"] = None
+
+        self._articles = [a for a in self._articles if a["_parsed_dt"] is not None]
+        self._articles.sort(key=lambda a: a["_parsed_dt"])
+        logger.info(f"Loaded {len(self._articles)} FT articles into training sentiment builder")
+
+    def get_embedding_for_timestamp(self, target_time: datetime) -> np.ndarray:
+        """Get consensus sentiment embedding for a specific timestamp."""
+        cutoff = target_time - timedelta(hours=self.lookback_hours)
+
+        relevant = [
+            a for a in self._articles
+            if cutoff <= a["_parsed_dt"] <= target_time
+        ]
+
+        if not relevant:
+            return np.zeros(768, dtype=np.float32)
+
+        relevant.sort(key=lambda a: a.get("relevance_score", 0), reverse=True)
+        relevant = relevant[: self.max_articles]
+
+        texts = []
+        weights = []
+        for a in relevant:
+            text = a.get("headline", "")
+            summary = a.get("summary", "")
+            if summary:
+                text = f"{text}. {summary}"
+            if text.strip():
+                texts.append(text)
+                weights.append(a.get("relevance_score", 0.01))
+
+        if not texts:
+            return np.zeros(768, dtype=np.float32)
+
+        return self.sentiment_model.get_consensus_embedding(
+            texts, use_hidden_states=True, weights=np.array(weights)
+        )
+
+    def build_embedding_series(
+        self,
+        timestamps: list[datetime],
+        batch_interval: int = 15,
+    ) -> np.ndarray:
+        """Build embeddings for a series of timestamps (for full dataset).
+
+        Caches embeddings every `batch_interval` minutes — consecutive bars
+        within the same interval share the same embedding.
+
+        Args:
+            timestamps: List of bar timestamps.
+            batch_interval: Minutes between embedding refreshes.
+
+        Returns:
+            Array of shape (n_timestamps, 768).
+        """
+        n = len(timestamps)
+        embeddings = np.zeros((n, 768), dtype=np.float32)
+        last_emb = np.zeros(768, dtype=np.float32)
+        last_emb_time = None
+
+        for i, ts in enumerate(timestamps):
+            if (
+                last_emb_time is None
+                or (ts - last_emb_time).total_seconds() > batch_interval * 60
+            ):
+                last_emb = self.get_embedding_for_timestamp(ts)
+                last_emb_time = ts
+
+                if (i + 1) % 1000 == 0:
+                    logger.info(f"Embedding progress: {i+1}/{n}")
+
+            embeddings[i] = last_emb
+
+        logger.info(f"Built embedding series: shape={embeddings.shape}")
+        return embeddings
+
+
+# =====================================================================
+# Live sentiment service: GDELT → FinBERT → consensus embedding
+# =====================================================================
+
+class SentimentService:
+    """Live sentiment service for inference.
+
+    Uses GDELT (free, no API key) for real-time news,
+    with FinBERT for embedding generation.
+    """
+
+    def __init__(
+        self,
+        model_device: str = "cpu",
+        update_interval: int = 900,  # 15 minutes
+    ):
+        self.gdelt = GDELTFetcher()
         self.sentiment_model = FinBERTSentiment(device=model_device)
         self.update_interval = update_interval
         self._last_update = 0.0
@@ -249,11 +446,11 @@ class SentimentService:
             if now - self._last_update < self.update_interval:
                 return self._cached_embedding
 
-        articles = self.news_fetcher.fetch()
-        texts = [a["text"] for a in articles if a["text"]]
+        articles = self.gdelt.fetch(hours_back=24, max_articles=20)
+        texts = [a["text"] for a in articles if a.get("text")]
 
         if not texts:
-            logger.warning("No news articles available, using zero embedding")
+            logger.warning("No GDELT articles available, using zero embedding")
             self._cached_embedding = np.zeros(768, dtype=np.float32)
         else:
             self._cached_embedding = self.sentiment_model.get_consensus_embedding(texts)

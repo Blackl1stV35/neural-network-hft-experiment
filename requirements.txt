@@ -30,6 +30,10 @@ python-dotenv>=1.0.0
 prometheus-client>=0.19.0
 python-telegram-bot>=20.7
 
+# Web scraping (FT.com sitemaps)
+beautifulsoup4>=4.12.0
+lxml>=5.1.0
+
 # Utilities
 requests>=2.31.0
 scikit-learn>=1.3.0

@@ -33,12 +33,23 @@ features:
 sentiment:
   enabled: true
   model: ProsusAI/finbert
-  sources:
-    - newsapi
-  update_interval: 900  # seconds (15 min)
+  training_source:
+    type: ft_sitemap
+    start_month: "2024-01"
+    end_month: null  # null = current month
+    min_relevance: 0.01
+    cache_dir: data/ft_cache
+    request_delay: [1.0, 3.0]
+    max_articles_per_month: 500
+  live_source:
+    type: gdelt  # free, no API key required
+    update_interval: 900  # seconds (15 min)
+    hours_back: 24
+    max_articles: 20
   cache_dir: data/sentiment_cache
   embedding_dim: 768
   use_hidden_states: true  # use intermediate layers, not just labels
+  lookback_hours: 24  # how far back to look for news per bar
 
 labeling:
   method: triple_barrier
