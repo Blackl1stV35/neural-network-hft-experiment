@@ -6,6 +6,7 @@ dist/
 build/
 .eggs/
 *.egg
+__init__.py
 
 # Virtual environments
 .venv/
