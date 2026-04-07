@@ -507,10 +507,14 @@ def load_sentiment_embeddings(
     to bars [offset : offset + n_bars]. This function extracts the matching
     slice.
 
+    Handles both formats:
+        - Correct: ndarray of shape (N, 768) saved by build_embedding_series
+        - Legacy:  pickled dict {day_key: embedding} saved by daily cache
+
     Args:
         embeddings_path: Path to sentiment_embeddings.npy
         n_bars: Number of sequences (after create_sequences)
-        offset: Number of bars trimmed by preprocessing (window_size + seq_length - 1)
+        offset: Number of bars trimmed by preprocessing (window_size + seq_length)
 
     Returns:
         Array of shape (n_bars, 768), aligned 1:1 with the model's X sequences.
@@ -519,7 +523,30 @@ def load_sentiment_embeddings(
         logger.warning(f"Sentiment embeddings not found: {embeddings_path}")
         return np.zeros((n_bars, 768), dtype=np.float32)
 
-    all_embeddings = np.load(embeddings_path)
+    try:
+        raw = np.load(embeddings_path, allow_pickle=False)
+    except ValueError:
+        # File contains a pickled object (dict from old daily cache format)
+        raw = np.load(embeddings_path, allow_pickle=True)
+
+    # Handle dict format: this is a daily cache, not a bar-level array
+    if isinstance(raw, np.ndarray) and raw.ndim == 0:
+        obj = raw.item()
+        if isinstance(obj, dict):
+            logger.error(
+                f"Sentiment file {embeddings_path} contains a daily cache dict, "
+                f"not a bar-level array. Re-run: python scripts/build_embeddings.py"
+            )
+            return np.zeros((n_bars, 768), dtype=np.float32)
+
+    all_embeddings = raw
+    if all_embeddings.ndim != 2 or all_embeddings.shape[1] != 768:
+        logger.error(
+            f"Unexpected embedding shape: {all_embeddings.shape}. "
+            f"Expected (N, 768). Re-run: python scripts/build_embeddings.py"
+        )
+        return np.zeros((n_bars, 768), dtype=np.float32)
+
     logger.info(f"Loaded sentiment embeddings: {all_embeddings.shape}")
 
     # Slice to match the sequence indices
@@ -529,9 +556,11 @@ def load_sentiment_embeddings(
             f"Embedding array too short ({len(all_embeddings)}) for "
             f"requested range [{offset}:{end}]. Padding with zeros."
         )
-        sliced = all_embeddings[offset:]
-        pad = np.zeros((end - len(all_embeddings), 768), dtype=np.float32)
-        sliced = np.concatenate([sliced, pad])
+        sliced = all_embeddings[offset:] if offset < len(all_embeddings) else np.empty((0, 768))
+        pad_rows = end - max(offset, 0) - len(sliced)
+        if pad_rows > 0:
+            pad = np.zeros((pad_rows, 768), dtype=np.float32)
+            sliced = np.concatenate([sliced, pad])
     else:
         sliced = all_embeddings[offset:end]
 

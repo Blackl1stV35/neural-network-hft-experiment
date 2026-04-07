@@ -56,4 +56,5 @@ labeling:
   profit_target_pips: 40
   stop_loss_pips: 20
   max_holding_minutes: 300
+  pip_value: 0.10  # XAUUSD: 1 pip = $0.10 price movement
   classes: [sell, hold, buy]  # mapped to [0, 1, 2]

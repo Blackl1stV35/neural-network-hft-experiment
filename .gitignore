@@ -20,8 +20,6 @@ env/
 
 # Data (tracked by DVC)
 data/*
-data/ft_cache/*
-data/sentiment_cache/*
 
 # Models (tracked by DVC)
 models/*.pt

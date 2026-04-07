@@ -103,7 +103,7 @@ class TripleBarrierLabeler:
         profit_target_pips: float = 10.0,
         stop_loss_pips: float = 5.0,
         max_holding_bars: int = 60,
-        pip_value: float = 0.01,  # XAUUSD: 1 pip = 0.01 USD
+        pip_value: float = 0.10,  # XAUUSD: 1 pip = $0.10 price move
     ):
         self.profit_target = profit_target_pips * pip_value
         self.stop_loss = stop_loss_pips * pip_value
@@ -194,11 +194,13 @@ def prepare_dataset(
     profit_target_pips: float = 10.0,
     stop_loss_pips: float = 5.0,
     max_holding_bars: int = 60,
+    pip_value: float = 0.10,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Full preprocessing pipeline: clean → scale → label → sequence.
 
     Args:
         df: Polars DataFrame with timestamp, open, high, low, close, tick_volume, spread
+        pip_value: Price movement per pip. XAUUSD = 0.10 ($0.10 per pip).
 
     Returns:
         X: (n_sequences, seq_length, n_features)
@@ -218,7 +220,7 @@ def prepare_dataset(
 
     # Label
     close_prices = df["close"].to_numpy()
-    labeler = TripleBarrierLabeler(profit_target_pips, stop_loss_pips, max_holding_bars)
+    labeler = TripleBarrierLabeler(profit_target_pips, stop_loss_pips, max_holding_bars, pip_value)
     labels = labeler.label(close_prices)
 
     # Trim the warm-up period for scaler

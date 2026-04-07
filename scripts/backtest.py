@@ -51,6 +51,7 @@ def main(cfg: DictConfig) -> None:
         profit_target_pips=cfg.data.labeling.profit_target_pips,
         stop_loss_pips=cfg.data.labeling.stop_loss_pips,
         max_holding_bars=cfg.data.labeling.max_holding_minutes,
+        pip_value=cfg.data.labeling.get("pip_value", 0.10),
     )
 
     # Use test split only
