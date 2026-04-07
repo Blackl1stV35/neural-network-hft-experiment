@@ -6,7 +6,6 @@ dist/
 build/
 .eggs/
 *.egg
-__init__.py
 
 # Virtual environments
 .venv/
@@ -23,8 +22,8 @@ env/
 data/*.duckdb
 data/*.csv
 data/*.parquet
-data/sentiment_cache/
-data/ft_cache/
+data/sentiment_cache/*
+data/ft_cache/*
 
 # Models (tracked by DVC)
 models/*.pt

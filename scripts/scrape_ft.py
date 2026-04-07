@@ -1,215 +1,182 @@
-# scripts/scrape_ft.py
-#!/usr/bin/env python3
+"""Scrape FT.com articles via sitemaps for training sentiment data.
+
+Usage:
+    # Scrape recent 6 months (requires FT cookie string in .env or --cookies)
+    python scripts/scrape_ft.py --start 2024-10 --end 2025-03
+
+    # With explicit cookie string
+    python scripts/scrape_ft.py --start 2025-01 --end 2025-03 \\
+        --cookies "FTSession=abc123; spoor-id=xyz789"
+
+    # Scrape with lower relevance threshold (more articles, less focused)
+    python scripts/scrape_ft.py --start 2024-01 --min-relevance 0.005
+
+    # Build FinBERT embeddings from cached articles
+    python scripts/scrape_ft.py --build-embeddings --data-dir data
 """
-Production-ready FT.com News Scraper
-- curl_cffi for fast sitemap crawling
-- Playwright CDP for reliable headline extraction (bypasses paywall)
-"""
+
+from __future__ import annotations
 
 import argparse
 import asyncio
-import json
-import logging
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
-import polars as pl
-from curl_cffi.requests import Session
-from playwright.async_api import async_playwright
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from loguru import logger
+from src.data.ft_scraper import FTSitemapScraper, FTArticleCache
+from src.utils.logger import setup_logger
 
 
-class HybridFTScraper:
-    def __init__(self, cookie_string: str):
-        self.cookie_string = cookie_string
-        self.curl = Session(impersonate="chrome")
-        self.browser = None
-        self.context = None
-        self.playwright = None
-
-    async def setup(self):
-        self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=True)
-        self.context = await self.browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
+async def scrape(args):
+    """Run FT sitemap scraping pipeline (async — uses Playwright for articles)."""
+    # Resolve cookie string: CLI arg > env var > empty (sitemap-only mode)
+    cookie_string = args.cookies or os.getenv("FT_COOKIE_STRING", "")
+    if not cookie_string:
+        logger.warning(
+            "No FT cookie string provided. Article body extraction will be limited.\n"
+            "Set FT_COOKIE_STRING in .env or pass --cookies '...'\n"
+            "To get cookies: open FT.com in Chrome → DevTools → Application → Cookies\n"
+            "Copy the full cookie header string."
         )
-        # Add cookies
-        cookie_list = []
-        for c in self.cookie_string.split(";"):
-            if "=" in c:
-                name, value = c.strip().split("=", 1)
-                cookie_list.append({"name": name.strip(), "value": value.strip(), "domain": ".ft.com", "path": "/"})
-        await self.context.add_cookies(cookie_list)
-        print("✅ Browser + cookies initialized")
 
-    async def get_headline(self, url: str, max_retries: int = 2):
-        """Extract real headline using CDP with retry logic"""
-        for attempt in range(max_retries):
-            page = None
-            try:
-                page = await self.context.new_page()
-                # Use domcontentloaded instead of networkidle for heavy JS sites
-                # FT.com has continuous ads/tracking so networkidle never completes
-                await page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                
-                # Wait a bit for JSON-LD to render
-                await asyncio.sleep(2)
-                
-                json_ld = await page.evaluate("""
-                    () => {
-                        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-                        for (let s of scripts) {
-                            try {
-                                const data = JSON.parse(s.textContent);
-                                if (data["@type"] === "NewsArticle" || data["@type"] === "Article") {
-                                    return data;
-                                }
-                            } catch(e) {}
-                        }
-                        return null;
-                    }
-                """)
-                if json_ld:
-                    headline = json_ld.get("headline") or json_ld.get("alternativeHeadline")
-                    if headline:
-                        return headline
-                
-                logger.warning(f"No headline found in JSON-LD for {url}")
-                return None
-                
-            except asyncio.TimeoutError:
-                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries} for {url}")
-                if attempt == max_retries - 1:
-                    logger.error(f"Failed to fetch {url} after {max_retries} attempts")
-                    return None
-                await asyncio.sleep(1)
-            except Exception as e:
-                logger.error(f"Error fetching {url}: {e}")
-                return None
-            finally:
-                if page:
-                    await page.close()
+    scraper = FTSitemapScraper(
+        cookie_string=cookie_string,
+        cache_dir=args.cache_dir,
+        request_delay=(args.min_delay, args.max_delay),
+    )
 
-    def fetch_sitemap(self, url: str):
-        """Fast sitemap fetch using curl_cffi"""
-        try:
-            resp = self.curl.get(url, timeout=15)
-            return resp.text if resp.status_code == 200 else None
-        except Exception as e:
-            print(f"    [curl_cffi failed for {url}] {e}")
-            return None
-
-    async def close(self):
-        if self.context:
-            await self.context.close()
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
-
-
-async def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--start", required=True, help="Start month YYYY-MM (e.g. 2025-04)")
-    parser.add_argument("--end", required=True, help="End month YYYY-MM (e.g. 2026-04)")
-    args = parser.parse_args()
-
-    # ←←← PASTE YOUR FULL COOKIE STRING HERE (from curl -b) ←←←
-    COOKIE_STRING = "FTClientSessionId=880b2d28-f266-42df-8d2e-b3adbfe3bf97; spoor-id=880b2d28-f266-42df-8d2e-b3adbfe3bf97; __cf_bm=lrXBQ63_Zvx3cEw2_87rGviYecnpxYBpDX4796UzJeA-1775499541.168267-1.0.1.1-bMRDCu52SofwFZlk05NECd8SC.B4q2eO5URZBhZLk1DgCTleW5ngyXMC7sDbvx8jpo7RVCHL4IzHoDWoR4hsu39gjrOPmI58uFvNd8m30N6Jck2so._PXWSi18rjb5Ve"
-
-    scraper = HybridFTScraper(COOKIE_STRING)
     try:
-        await scraper.setup()
+        articles = await scraper.fetch_articles(
+            start_month=args.start,
+            end_month=args.end,
+            min_relevance=args.min_relevance,
+            max_articles_per_month=args.max_per_month,
+        )
 
-        print(f"🔄 Full scraping FT news from {args.start} to {args.end}...")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Scraping complete: {len(articles)} relevant articles")
+        logger.info(f"Date range: {args.start} → {args.end}")
+        logger.info(f"Cache dir: {args.cache_dir}")
 
-        articles = []
-        start_date = datetime.strptime(args.start, "%Y-%m")
-        end_date = datetime.strptime(args.end, "%Y-%m")
-
-        # 1. Fetch sitemap index
-        index_url = "https://www.ft.com/sitemaps/index.xml"
-        print("📡 Fetching sitemap index...")
-        index_xml = scraper.fetch_sitemap(index_url)
-
-        if not index_xml:
-            print("❌ Failed to fetch sitemap index")
-            return
-
-        # 2. Parse monthly archives
-        from xml.etree import ElementTree as ET
-        root = ET.fromstring(index_xml)
-
-        for sitemap in root.findall('.//{http://www.sitemaps.org/schemas/sitemap/0.9}sitemap'):
-            loc = sitemap.find('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')
-            lastmod = sitemap.find('{http://www.sitemaps.org/schemas/sitemap/0.9}lastmod')
-
-            if loc is None or loc.text is None:
-                continue
-
-            archive_url = loc.text
-            # Check if archive is within date range
-            try:
-                # Extract date from URL like: https://www.ft.com/sitemaps/archive-2025-04.xml
-                date_str = archive_url.split("archive-")[-1].split(".xml")[0]
-                archive_date = datetime.strptime(date_str, "%Y-%m")
-            except ValueError:
-                continue
-
-            if not (start_date <= archive_date <= end_date):
-                continue
-
-            print(f"   → Processing monthly archive: {archive_url}")
-
-            # 3. Fetch monthly archive
-            monthly_xml = scraper.fetch_sitemap(archive_url)
-            if not monthly_xml:
-                continue
-
-            monthly_root = ET.fromstring(monthly_xml)
-
-            for url_entry in monthly_root.findall('.//{http://www.sitemaps.org/schemas/sitemap/0.9}url'):
-                loc = url_entry.find('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')
-                if loc is None or loc.text is None:
-                    continue
-
-                article_url = loc.text
-
-                # 4. Extract headline using CDP
-                logger.info(f"Processing: {article_url}")
-                headline = await scraper.get_headline(article_url)
-
-                if headline:
-                    articles.append({
-                        "title": headline,
-                        "url": article_url,
-                        "published_at": datetime.now()  # will be improved later
-                    })
-                    print(f"      ✅ Added: {headline[:80]}...")
-                    # Small delay between requests to avoid overwhelming server
-                    await asyncio.sleep(0.5)
-                else:
-                    logger.info(f"Skipped (no headline): {article_url}")
-                    await asyncio.sleep(0.3)
-
-        print(f"\n✅ Total relevant articles found: {len(articles)}")
-
-        # 5. Save raw dataset
         if articles:
-            output_dir = Path("data/news")
-            output_dir.mkdir(parents=True, exist_ok=True)
-            df = pl.DataFrame(articles)
-            output_file = output_dir / f"ft_raw_{args.start}_to_{args.end}.parquet"
-            df.write_parquet(output_file)
-            print(f"💾 Saved raw news dataset → {output_file}")
+            # Show top 10 by relevance
+            top = sorted(articles, key=lambda a: a.relevance_score, reverse=True)[:10]
+            logger.info(f"\nTop 10 most relevant articles:")
+            for i, a in enumerate(top, 1):
+                logger.info(f"  {i}. [{a.relevance_score:.3f}] {a.headline[:80]}")
 
-        print("🎉 Full scraping completed!")
+            # Stats
+            avg_relevance = sum(a.relevance_score for a in articles) / len(articles)
+            with_body = sum(1 for a in articles if a.body_text)
+            logger.info(f"\nStats:")
+            logger.info(f"  Average relevance: {avg_relevance:.4f}")
+            logger.info(f"  Articles with body text: {with_body}/{len(articles)}")
+            logger.info(f"  Date range: {articles[0].published_at[:10]} → {articles[-1].published_at[:10]}")
+
+        # Also save as Parquet for easy Polars/Pandas access
+        if articles:
+            try:
+                import polars as pl
+
+                output_dir = Path(args.cache_dir) / "parquet"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                df = pl.DataFrame([a.to_dict() for a in articles])
+                parquet_path = output_dir / f"ft_{args.start}_to_{args.end or 'now'}.parquet"
+                df.write_parquet(parquet_path)
+                logger.info(f"Saved Parquet: {parquet_path}")
+            except ImportError:
+                pass
+
     finally:
         await scraper.close()
 
 
+def build_embeddings(args):
+    """Build FinBERT embeddings from cached FT articles."""
+    import numpy as np
+    import polars as pl
+
+    from src.data.sentiment import TrainingSentimentBuilder
+    from src.data.tick_store import TickStore
+
+    # Load price data timestamps
+    store = TickStore(f"{args.data_dir}/ticks.duckdb")
+    df = store.query_ohlcv("XAUUSD", "M1")
+    store.close()
+
+    if df.is_empty():
+        logger.error("No price data. Run download_data.py first.")
+        return
+
+    timestamps = df["timestamp"].to_list()
+    logger.info(f"Building embeddings for {len(timestamps)} bars")
+
+    # Build
+    builder = TrainingSentimentBuilder(
+        ft_cache_dir=f"{args.cache_dir}/processed",
+        model_device="cuda" if args.gpu else "cpu",
+        lookback_hours=24,
+    )
+
+    embeddings = builder.build_embedding_series(timestamps, batch_interval=15)
+
+    # Save
+    output_path = Path(args.data_dir) / "sentiment_embeddings.npy"
+    np.save(str(output_path), embeddings)
+    logger.info(f"Saved embeddings to {output_path}: shape={embeddings.shape}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="FT.com article scraper for training data")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Scrape command
+    scrape_parser = subparsers.add_parser("scrape", help="Scrape FT articles")
+    scrape_parser.add_argument("--start", required=True, help="Start month YYYY-MM")
+    scrape_parser.add_argument("--end", default=None, help="End month YYYY-MM")
+    scrape_parser.add_argument("--min-relevance", type=float, default=0.01)
+    scrape_parser.add_argument("--max-per-month", type=int, default=500)
+    scrape_parser.add_argument("--cache-dir", default="data/ft_cache")
+    scrape_parser.add_argument("--min-delay", type=float, default=1.0)
+    scrape_parser.add_argument("--max-delay", type=float, default=3.0)
+    scrape_parser.add_argument("--cookies", default=None, help="FT.com cookie string")
+
+    # Build embeddings command
+    embed_parser = subparsers.add_parser("embed", help="Build FinBERT embeddings")
+    embed_parser.add_argument("--cache-dir", default="data/ft_cache")
+    embed_parser.add_argument("--data-dir", default="data")
+    embed_parser.add_argument("--gpu", action="store_true")
+
+    # Shortcut: no subcommand = scrape
+    parser.add_argument("--start", default=None)
+    parser.add_argument("--end", default=None)
+    parser.add_argument("--min-relevance", type=float, default=0.01)
+    parser.add_argument("--max-per-month", type=int, default=500)
+    parser.add_argument("--cache-dir", default="data/ft_cache")
+    parser.add_argument("--min-delay", type=float, default=1.0)
+    parser.add_argument("--max-delay", type=float, default=3.0)
+    parser.add_argument("--cookies", default=None, help="FT.com cookie string")
+    parser.add_argument("--build-embeddings", action="store_true")
+    parser.add_argument("--data-dir", default="data")
+    parser.add_argument("--gpu", action="store_true")
+
+    args = parser.parse_args()
+
+    setup_logger()
+
+    if args.command == "embed" or getattr(args, "build_embeddings", False):
+        build_embeddings(args)
+    elif args.command == "scrape" or args.start:
+        if not args.start:
+            parser.error("--start is required for scraping")
+        asyncio.run(scrape(args))
+    else:
+        parser.print_help()
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
