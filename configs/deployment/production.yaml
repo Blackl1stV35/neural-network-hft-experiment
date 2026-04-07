@@ -24,6 +24,7 @@ risk:
   latency_kill_ms: 50.0
   news_blackout_minutes: 30
   blackout_events: [FOMC, NFP, CPI, PPI, GDP]
+  human_exit_approval: true  # HITL: require human approval for position exits
 
 monitoring:
   prometheus_port: 9090

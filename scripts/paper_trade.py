@@ -38,6 +38,7 @@ class TradingLoop:
 
         self.synthetic = synthetic
         self.running = False
+        self.hitl_enabled = False
 
         # Components
         self.engine: ONNXInferenceEngine = None
@@ -102,6 +103,11 @@ class TradingLoop:
             base_lot_size=self.config.get("broker", {}).get("lot_size", 0.01),
         )
 
+        # HITL exit approval
+        self.hitl_enabled = self.config.get("risk", {}).get("human_exit_approval", False)
+        if self.hitl_enabled:
+            logger.info("HITL exit approval ENABLED — exits will require human confirmation")
+
         # Monitoring
         self.metrics = MetricsCollector()
         self.alerter = TelegramAlerter()
@@ -164,6 +170,26 @@ class TradingLoop:
                     model_uncertainty=1.0 - confidence,
                     inference_latency_ms=latency,
                 )
+
+                # HITL: intercept automated exits for human approval
+                if (
+                    self.hitl_enabled
+                    and result.get("action_taken") in ("uncertainty_exit", "force_close")
+                    and not self.synthetic
+                ):
+                    pos_dir = self.order_manager.state.current_position_direction
+                    ctx_dir = "LONG" if pos_dir == 1 else "SHORT" if pos_dir == -1 else "FLAT"
+                    reason = result.get("block_reason", result.get("action_taken", ""))
+                    print(f"\n{'='*50}")
+                    print(f"  EXIT APPROVAL REQUESTED")
+                    print(f"  Position:  {ctx_dir}")
+                    print(f"  Price:     {tick['bid']:.2f}")
+                    print(f"  Reason:    {reason}")
+                    print(f"{'='*50}")
+                    resp = input("  Approve exit? (y/n): ").strip().lower()
+                    if resp not in ("y", "yes"):
+                        logger.info("HITL: Exit vetoed by human operator")
+                        result["action_taken"] = "hitl_vetoed"
 
                 self.metrics.record_inference(latency, 1.0 - confidence)
 

@@ -33,10 +33,11 @@ from loguru import logger
 class Trainer:
     """Model training loop with early stopping and mixed precision."""
 
-    def __init__(self, cfg: DictConfig, model: nn.Module, device: torch.device):
+    def __init__(self, cfg: DictConfig, model: nn.Module, device: torch.device, use_sentiment: bool = False):
         self.cfg = cfg
         self.model = model.to(device)
         self.device = device
+        self.use_sentiment = use_sentiment
 
         # Optimizer
         self.optimizer = torch.optim.AdamW(
@@ -61,6 +62,24 @@ class Trainer:
         self.best_val_loss = float("inf")
         self.patience_counter = 0
 
+    def _unpack_batch(self, batch):
+        """Unpack a batch that may be (X, y) or (X, sentiment, y)."""
+        if self.use_sentiment and len(batch) == 3:
+            X, S, y = batch
+            return X.to(self.device), S.to(self.device), y.to(self.device)
+        else:
+            X, y = batch[0], batch[-1]
+            return X.to(self.device), None, y.to(self.device)
+
+    def _forward(self, X, S):
+        """Forward pass, optionally passing sentiment to the model."""
+        if S is not None and hasattr(self.model, 'fusion'):
+            # Model supports sentiment (MambaSSMModel)
+            return self.model(X, sentiment=S)
+        else:
+            # Model doesn't take sentiment (CNN-LSTM, TCN)
+            return self.model(X)
+
     def train_epoch(self, dataloader: DataLoader) -> dict:
         """Run one training epoch."""
         self.model.train()
@@ -68,15 +87,14 @@ class Trainer:
         correct = 0
         total = 0
 
-        for X_batch, y_batch in dataloader:
-            X_batch = X_batch.to(self.device)
-            y_batch = y_batch.to(self.device)
+        for batch in dataloader:
+            X_batch, S_batch, y_batch = self._unpack_batch(batch)
 
             self.optimizer.zero_grad()
 
             if self.use_amp:
                 with torch.amp.autocast("cuda"):
-                    logits = self.model(X_batch)
+                    logits = self._forward(X_batch, S_batch)
                     loss = self.criterion(logits, y_batch)
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(self.optimizer)
@@ -86,7 +104,7 @@ class Trainer:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
-                logits = self.model(X_batch)
+                logits = self._forward(X_batch, S_batch)
                 loss = self.criterion(logits, y_batch)
                 loss.backward()
                 nn.utils.clip_grad_norm_(
@@ -114,10 +132,9 @@ class Trainer:
         correct = 0
         total = 0
 
-        for X_batch, y_batch in dataloader:
-            X_batch = X_batch.to(self.device)
-            y_batch = y_batch.to(self.device)
-            logits = self.model(X_batch)
+        for batch in dataloader:
+            X_batch, S_batch, y_batch = self._unpack_batch(batch)
+            logits = self._forward(X_batch, S_batch)
             loss = self.criterion(logits, y_batch)
             total_loss += loss.item() * X_batch.size(0)
             preds = logits.argmax(dim=-1)
@@ -195,6 +212,24 @@ def main(cfg: DictConfig) -> None:
         max_holding_bars=cfg.data.labeling.max_holding_minutes,
     )
 
+    # Load sentiment embeddings if enabled
+    use_sentiment = cfg.data.get("sentiment", {}).get("enabled", False)
+    sentiment_embeddings = None
+    if use_sentiment:
+        from src.data.sentiment import load_sentiment_embeddings
+
+        emb_path = cfg.paths.data_dir + "/sentiment_embeddings.npy"
+        # Offset = window_size (scaler warmup) + seq_length (sequence creation)
+        # The label for sequence i corresponds to bar (offset + i)
+        offset = cfg.data.preprocessing.window_size
+        # create_sequences trims another (seq_length) bars from the front
+        total_offset = offset + cfg.model.input.sequence_length
+        sentiment_embeddings = load_sentiment_embeddings(emb_path, n_bars=len(X), offset=total_offset)
+        logger.info(
+            f"Sentiment embeddings loaded: {sentiment_embeddings.shape} "
+            f"(offset={total_offset}, non-zero={np.count_nonzero(sentiment_embeddings.sum(axis=1))})"
+        )
+
     # Split
     n = len(X)
     n_test = int(n * cfg.training.test_split)
@@ -207,10 +242,25 @@ def main(cfg: DictConfig) -> None:
 
     logger.info(f"Train: {n_train}, Val: {n_val}, Test: {n_test}")
 
-    # Dataloaders
-    train_ds = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
-    val_ds = TensorDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val))
-    test_ds = TensorDataset(torch.FloatTensor(X_test), torch.LongTensor(y_test))
+    # Dataloaders — include sentiment if available
+    if use_sentiment and sentiment_embeddings is not None:
+        s_train = sentiment_embeddings[:n_train]
+        s_val = sentiment_embeddings[n_train : n_train + n_val]
+        s_test = sentiment_embeddings[n_train + n_val :]
+
+        train_ds = TensorDataset(
+            torch.FloatTensor(X_train), torch.FloatTensor(s_train), torch.LongTensor(y_train)
+        )
+        val_ds = TensorDataset(
+            torch.FloatTensor(X_val), torch.FloatTensor(s_val), torch.LongTensor(y_val)
+        )
+        test_ds = TensorDataset(
+            torch.FloatTensor(X_test), torch.FloatTensor(s_test), torch.LongTensor(y_test)
+        )
+    else:
+        train_ds = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
+        val_ds = TensorDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val))
+        test_ds = TensorDataset(torch.FloatTensor(X_test), torch.LongTensor(y_test))
 
     train_loader = DataLoader(
         train_ds, batch_size=cfg.training.batch_size, shuffle=True,
@@ -223,7 +273,7 @@ def main(cfg: DictConfig) -> None:
     model = build_model(cfg.model)
 
     # Train
-    trainer = Trainer(cfg, model, device)
+    trainer = Trainer(cfg, model, device, use_sentiment=use_sentiment)
     best_metrics = {}
 
     for epoch in range(1, cfg.training.epochs + 1):

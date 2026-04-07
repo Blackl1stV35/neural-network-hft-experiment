@@ -291,14 +291,19 @@ class FinBERTSentiment:
 
 
 # =====================================================================
-# Training sentiment builder: FT.com → time-aligned embeddings
+# Training sentiment builder: FT.com → DAILY consensus embeddings
 # =====================================================================
 
 class TrainingSentimentBuilder:
-    """Build time-aligned sentiment embeddings from FT.com article cache.
+    """Build DAILY time-aligned sentiment embeddings from FT.com article cache.
 
-    For each bar in the training data, looks up articles published within
-    a lookback window and generates a consensus embedding.
+    Instead of a single global consensus or per-15-min refresh, this computes
+    one 768-dim embedding per calendar day using all articles published on or
+    before that day (within the lookback window). All M1 bars within the same
+    calendar day share the same embedding — this is the correct granularity
+    because news sentiment shifts daily, not per-minute.
+
+    Output shape: (n_bars, 768) — each row is the daily consensus for that bar's day.
     """
 
     def __init__(
@@ -306,10 +311,10 @@ class TrainingSentimentBuilder:
         ft_cache_dir: str = "data/ft_cache/processed",
         model_device: str = "cpu",
         lookback_hours: int = 24,
-        max_articles_per_bar: int = 15,
+        max_articles_per_day: int = 30,
     ):
         self.lookback_hours = lookback_hours
-        self.max_articles = max_articles_per_bar
+        self.max_articles = max_articles_per_day
         self.sentiment_model = FinBERTSentiment(device=model_device)
 
         # Load all cached FT articles into memory for fast lookup
@@ -328,6 +333,16 @@ class TrainingSentimentBuilder:
                 data = json.load(f)
                 self._articles.extend(data)
 
+        # Also try parquet files
+        for pq_file in sorted(cache_path.glob("*.parquet")):
+            try:
+                import polars as pl
+                df = pl.read_parquet(str(pq_file))
+                for row in df.iter_rows(named=True):
+                    self._articles.append(row)
+            except Exception:
+                pass
+
         # Parse dates
         for a in self._articles:
             try:
@@ -345,31 +360,53 @@ class TrainingSentimentBuilder:
         self._articles.sort(key=lambda a: a["_parsed_dt"])
         logger.info(f"Loaded {len(self._articles)} FT articles into training sentiment builder")
 
-    def get_embedding_for_timestamp(self, target_time: datetime) -> np.ndarray:
-        """Get consensus sentiment embedding for a specific timestamp."""
-        cutoff = target_time - timedelta(hours=self.lookback_hours)
+    def _get_articles_for_day(self, day: datetime) -> list[dict]:
+        """Get articles published within lookback window ending at end-of-day.
 
-        relevant = [
-            a for a in self._articles
-            if cutoff <= a["_parsed_dt"] <= target_time
-        ]
+        For a given calendar day, collects articles published between
+        [day_start - lookback_hours, day_end] — this means the embedding
+        for Monday includes articles from Sunday evening if lookback=24h.
+        """
+        day_end = day.replace(hour=23, minute=59, second=59)
+        cutoff = day_end - timedelta(hours=self.lookback_hours)
+
+        # Binary search for start index (articles are sorted by date)
+        lo, hi = 0, len(self._articles)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if self._articles[mid]["_parsed_dt"] < cutoff:
+                lo = mid + 1
+            else:
+                hi = mid
+
+        relevant = []
+        for i in range(lo, len(self._articles)):
+            a = self._articles[i]
+            if a["_parsed_dt"] > day_end:
+                break
+            relevant.append(a)
+
+        # Sort by relevance, take top N
+        relevant.sort(key=lambda a: a.get("relevance_score", 0), reverse=True)
+        return relevant[: self.max_articles]
+
+    def get_embedding_for_day(self, day: datetime) -> np.ndarray:
+        """Compute consensus sentiment embedding for a single calendar day."""
+        relevant = self._get_articles_for_day(day)
 
         if not relevant:
             return np.zeros(768, dtype=np.float32)
 
-        relevant.sort(key=lambda a: a.get("relevance_score", 0), reverse=True)
-        relevant = relevant[: self.max_articles]
-
         texts = []
         weights = []
         for a in relevant:
-            text = a.get("headline", "")
-            summary = a.get("summary", "")
+            text = a.get("headline", "") or a.get("title", "")
+            summary = a.get("summary", "") or a.get("body_snippet", "")
             if summary:
                 text = f"{text}. {summary}"
             if text.strip():
                 texts.append(text)
-                weights.append(a.get("relevance_score", 0.01))
+                weights.append(max(a.get("relevance_score", 0.01), 0.001))
 
         if not texts:
             return np.zeros(768, dtype=np.float32)
@@ -381,40 +418,124 @@ class TrainingSentimentBuilder:
     def build_embedding_series(
         self,
         timestamps: list[datetime],
-        batch_interval: int = 15,
+        cache_path: Optional[str] = None,
     ) -> np.ndarray:
-        """Build embeddings for a series of timestamps (for full dataset).
+        """Build daily consensus embeddings for a series of bar timestamps.
 
-        Caches embeddings every `batch_interval` minutes — consecutive bars
-        within the same interval share the same embedding.
+        Groups all bars by calendar day, computes one FinBERT embedding per day,
+        then broadcasts that embedding to all bars within the same day.
+
+        This is ~100x faster than per-bar or per-15-min computation and
+        semantically correct — news sentiment is a daily-frequency signal.
 
         Args:
-            timestamps: List of bar timestamps.
-            batch_interval: Minutes between embedding refreshes.
+            timestamps: List of bar timestamps (M1 frequency).
+            cache_path: If set, save/load intermediate daily embeddings here.
 
         Returns:
             Array of shape (n_timestamps, 768).
         """
+        # Extract unique calendar days
+        day_to_indices: dict[str, list[int]] = {}
+        for i, ts in enumerate(timestamps):
+            day_key = ts.strftime("%Y-%m-%d")
+            if day_key not in day_to_indices:
+                day_to_indices[day_key] = []
+            day_to_indices[day_key].append(i)
+
+        unique_days = sorted(day_to_indices.keys())
+        logger.info(
+            f"Building daily embeddings: {len(unique_days)} unique days "
+            f"for {len(timestamps)} bars"
+        )
+
+        # Check cache for daily embeddings
+        daily_cache: dict[str, np.ndarray] = {}
+        daily_cache_path = Path(cache_path) if cache_path else None
+        if daily_cache_path and daily_cache_path.exists():
+            cached = np.load(str(daily_cache_path), allow_pickle=True).item()
+            if isinstance(cached, dict):
+                daily_cache = cached
+                logger.info(f"Loaded {len(daily_cache)} cached daily embeddings")
+
+        # Compute embeddings for each unique day
+        for idx, day_key in enumerate(unique_days):
+            if day_key in daily_cache:
+                continue
+
+            day_dt = datetime.strptime(day_key, "%Y-%m-%d")
+            emb = self.get_embedding_for_day(day_dt)
+            daily_cache[day_key] = emb
+
+            if (idx + 1) % 50 == 0:
+                logger.info(f"Daily embedding progress: {idx+1}/{len(unique_days)}")
+
+        # Save daily cache
+        if daily_cache_path:
+            daily_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            np.save(str(daily_cache_path), daily_cache)
+            logger.info(f"Saved daily embedding cache: {daily_cache_path}")
+
+        # Broadcast daily embeddings to all bars
         n = len(timestamps)
         embeddings = np.zeros((n, 768), dtype=np.float32)
-        last_emb = np.zeros(768, dtype=np.float32)
-        last_emb_time = None
+        zero_emb = np.zeros(768, dtype=np.float32)
 
-        for i, ts in enumerate(timestamps):
-            if (
-                last_emb_time is None
-                or (ts - last_emb_time).total_seconds() > batch_interval * 60
-            ):
-                last_emb = self.get_embedding_for_timestamp(ts)
-                last_emb_time = ts
+        for day_key, indices in day_to_indices.items():
+            emb = daily_cache.get(day_key, zero_emb)
+            for i in indices:
+                embeddings[i] = emb
 
-                if (i + 1) % 1000 == 0:
-                    logger.info(f"Embedding progress: {i+1}/{n}")
-
-            embeddings[i] = last_emb
-
-        logger.info(f"Built embedding series: shape={embeddings.shape}")
+        # Stats
+        nonzero_days = sum(1 for d in unique_days if np.any(daily_cache.get(d, zero_emb) != 0))
+        logger.info(
+            f"Built embedding series: shape={embeddings.shape}, "
+            f"{nonzero_days}/{len(unique_days)} days have non-zero embeddings"
+        )
         return embeddings
+
+
+def load_sentiment_embeddings(
+    embeddings_path: str,
+    n_bars: int,
+    offset: int = 0,
+) -> np.ndarray:
+    """Load pre-built sentiment embeddings and align with model sequences.
+
+    The embeddings file has one row per original bar. After preprocessing
+    (window trimming + sequence creation), the model's sequences correspond
+    to bars [offset : offset + n_bars]. This function extracts the matching
+    slice.
+
+    Args:
+        embeddings_path: Path to sentiment_embeddings.npy
+        n_bars: Number of sequences (after create_sequences)
+        offset: Number of bars trimmed by preprocessing (window_size + seq_length - 1)
+
+    Returns:
+        Array of shape (n_bars, 768), aligned 1:1 with the model's X sequences.
+    """
+    if not Path(embeddings_path).exists():
+        logger.warning(f"Sentiment embeddings not found: {embeddings_path}")
+        return np.zeros((n_bars, 768), dtype=np.float32)
+
+    all_embeddings = np.load(embeddings_path)
+    logger.info(f"Loaded sentiment embeddings: {all_embeddings.shape}")
+
+    # Slice to match the sequence indices
+    end = offset + n_bars
+    if end > len(all_embeddings):
+        logger.warning(
+            f"Embedding array too short ({len(all_embeddings)}) for "
+            f"requested range [{offset}:{end}]. Padding with zeros."
+        )
+        sliced = all_embeddings[offset:]
+        pad = np.zeros((end - len(all_embeddings), 768), dtype=np.float32)
+        sliced = np.concatenate([sliced, pad])
+    else:
+        sliced = all_embeddings[offset:end]
+
+    return sliced.astype(np.float32)
 
 
 # =====================================================================

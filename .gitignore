@@ -19,11 +19,9 @@ env/
 *.swo
 
 # Data (tracked by DVC)
-data/*.duckdb
-data/*.csv
-data/*.parquet
-data/sentiment_cache/*
+data/*
 data/ft_cache/*
+data/sentiment_cache/*
 
 # Models (tracked by DVC)
 models/*.pt

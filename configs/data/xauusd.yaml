@@ -53,7 +53,7 @@ sentiment:
 
 labeling:
   method: triple_barrier
-  profit_target_pips: 10
-  stop_loss_pips: 5
-  max_holding_minutes: 60
+  profit_target_pips: 40
+  stop_loss_pips: 20
+  max_holding_minutes: 300
   classes: [sell, hold, buy]  # mapped to [0, 1, 2]

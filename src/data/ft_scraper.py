@@ -36,28 +36,26 @@ NS_IMAGE = "{http://www.google.com/schemas/sitemap-image/1.1}"
 
 # Gold/macro keywords for filtering relevant articles
 GOLD_MACRO_KEYWORDS = [
-    # Direct gold terms (highest priority)
-    "gold", "xau", "xauusd", "spot gold", "gold price", "gold futures", "gold etf",
-    "bullion", "precious metal", "central bank gold buying", "gold reserve",
-
-    # Monetary policy & central banks
-    "federal reserve", "fomc", "ecb", "boj", "pboc", "rate cut", "rate hike",
-    "rate decision", "monetary policy", "quantitative easing", "quantitative tightening",
-
-    # Inflation & yields
+    # Direct gold
+    "gold", "xauusd", "bullion", "precious metal",
+    # Central banks / monetary policy
+    "federal reserve", "fomc", "interest rate", "rate decision", "rate cut",
+    "rate hike", "monetary policy", "quantitative", "tightening", "easing",
+    "central bank", "ecb", "boj", "pboc",
+    # Inflation / yields
     "inflation", "cpi", "ppi", "treasury yield", "bond yield", "real yield",
-
-    # Dollar & FX
-    "dollar index", "dxy", "dollar strength", "dollar weakness", "usd",
-
-    # Geopolitical / safe-haven (narrowed)
-    "safe haven", "geopolitical risk", "middle east tension", "trade war", "tariff",
-
-    # Key economic indicators
-    "nonfarm payroll", "unemployment", "gdp", "pmi", "consumer confidence",
-
-    # Mining & major gold companies (bonus signal)
-    "barrick", "newmont", "goldman sachs gold",
+    "deflation", "stagflation",
+    # Dollar / FX
+    "dollar index", "dxy", "dollar strength", "dollar weakness",
+    "currency", "forex", "usd",
+    # Geopolitical / safe haven
+    "safe haven", "geopolitical", "war", "conflict", "sanctions",
+    "trade war", "tariff",
+    # Economic indicators
+    "nonfarm", "payroll", "unemployment", "gdp", "retail sales",
+    "manufacturing", "pmi", "consumer confidence",
+    # Commodities context
+    "commodity", "oil price", "silver", "copper",
 ]
 
 # Compile keyword patterns for fast matching

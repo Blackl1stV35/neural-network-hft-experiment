@@ -38,7 +38,7 @@ scrape-ft-full:
 	python scripts/scrape_ft.py --start 2020-01 --min-relevance 0.005
 
 build-embeddings:
-	python scripts/scrape_ft.py --build-embeddings --data-dir data
+	python scripts/build_embeddings.py --data-dir data --cache-dir data/ft_cache/processed
 
 # Training
 train-baseline:

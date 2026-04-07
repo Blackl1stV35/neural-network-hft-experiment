@@ -9,7 +9,7 @@ DO NOT TRUST A MODEL THAT HASN'T BEEN BACKTESTED WITH REALISTIC:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 from loguru import logger
@@ -27,6 +27,7 @@ class BacktestConfig:
     pip_value: float = 0.01
     pip_usd_per_lot: float = 1.0  # per 0.01 lot
     max_position_time: int = 120
+    human_exit_approval: bool = False  # HITL: require human approval for exits
 
 
 @dataclass
@@ -141,10 +142,54 @@ class BacktestResult:
 
 
 class BacktestEngine:
-    """Run backtests on historical data with realistic execution."""
+    """Run backtests on historical data with realistic execution.
+
+    Supports optional human-in-the-loop (HITL) exit approval via a callback.
+    When enabled, every exit (signal reversal, max hold time) is routed through
+    the callback which can veto (return False) to keep the position open.
+    """
 
     def __init__(self, config: Optional[BacktestConfig] = None):
         self.config = config or BacktestConfig()
+        self._exit_approval_fn: Optional[Callable[[dict], bool]] = None
+
+    def set_exit_approval_fn(self, fn: Callable[[dict], bool]) -> None:
+        """Register a human-in-the-loop exit approval callback.
+
+        The callback receives a dict with exit context and must return
+        True (approve exit) or False (veto — keep position open).
+
+        Args:
+            fn: Callable that takes exit_context dict, returns bool.
+                Context keys: direction, entry_price, current_price,
+                unrealized_pnl_pips, hold_time, exit_reason.
+        """
+        self._exit_approval_fn = fn
+
+    def _request_exit_approval(
+        self, position: tuple, price: float, idx: int, reason: str
+    ) -> bool:
+        """Check HITL approval for an exit if enabled.
+
+        Returns True if exit is approved (or HITL is disabled).
+        """
+        if not self.config.human_exit_approval or self._exit_approval_fn is None:
+            return True
+
+        cfg = self.config
+        direction, entry_price, entry_idx = position
+        pnl_pips = (price - entry_price) * direction / cfg.pip_value
+        hold_time = idx - entry_idx
+
+        context = {
+            "direction": "LONG" if direction == 1 else "SHORT",
+            "entry_price": round(entry_price, 2),
+            "current_price": round(price, 2),
+            "unrealized_pnl_pips": round(pnl_pips, 1),
+            "hold_time": hold_time,
+            "exit_reason": reason,
+        }
+        return self._exit_approval_fn(context)
 
     def run(
         self,
@@ -172,10 +217,12 @@ class BacktestEngine:
 
             # Force close if max hold time exceeded
             if position and (i - position[2]) >= cfg.max_position_time:
-                pnl = self._close(position, price, i, "max_time")
-                trades.append(pnl)
-                balance += pnl.pnl_usd
-                position = None
+                if self._request_exit_approval(position, price, i, "max_time"):
+                    pnl = self._close(position, price, i, "max_time")
+                    trades.append(pnl)
+                    balance += pnl.pnl_usd
+                    position = None
+                # else: HITL vetoed — keep position open past max time
 
             # Execute signal
             if signal == 2 and position is None:  # Buy
@@ -191,22 +238,26 @@ class BacktestEngine:
                 position = (-1, entry, i)  # short
 
             elif signal == 2 and position and position[0] == -1:  # Close short + open long
-                pnl = self._close(position, price, i, "signal_reverse")
-                trades.append(pnl)
-                balance += pnl.pnl_usd
-                entry = price + cfg.spread_pips * cfg.pip_value * 0.5
-                position = (1, entry, i)
+                if self._request_exit_approval(position, price, i, "signal_reverse"):
+                    pnl = self._close(position, price, i, "signal_reverse")
+                    trades.append(pnl)
+                    balance += pnl.pnl_usd
+                    entry = price + cfg.spread_pips * cfg.pip_value * 0.5
+                    position = (1, entry, i)
+                # else: HITL vetoed — keep short, skip buy entry
 
             elif signal == 0 and position and position[0] == 1:  # Close long + open short
-                pnl = self._close(position, price, i, "signal_reverse")
-                trades.append(pnl)
-                balance += pnl.pnl_usd
-                entry = price - cfg.spread_pips * cfg.pip_value * 0.5
-                position = (-1, entry, i)
+                if self._request_exit_approval(position, price, i, "signal_reverse"):
+                    pnl = self._close(position, price, i, "signal_reverse")
+                    trades.append(pnl)
+                    balance += pnl.pnl_usd
+                    entry = price - cfg.spread_pips * cfg.pip_value * 0.5
+                    position = (-1, entry, i)
+                # else: HITL vetoed — keep long, skip short entry
 
             equity.append(balance)
 
-        # Close remaining position
+        # Close remaining position at end (no HITL for end-of-data)
         if position:
             pnl = self._close(position, prices[-1], len(prices) - 1, "end_of_data")
             trades.append(pnl)
