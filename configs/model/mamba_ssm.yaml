@@ -1,3 +1,4 @@
+# configs/model/mamba_ssm.yaml
 name: mamba_ssm
 type: mamba_ssm
 
@@ -15,10 +16,10 @@ tcn:
   dropout: 0.2
 
 fusion:
-  method: concat_project  # concat_project | gated | attention
-  hidden_dim: 256
-  sentiment_dim: 768  # FinBERT hidden size
-  ta_dim: 12  # number of TA indicators
+  method: concat_project   # concat_project | gated | attention
+  hidden_dim: 256          # default, sweep can override
+  sentiment_dim: 768       # FinBERT hidden size
+  ta_dim: 12               # number of TA indicators
 
 classifier:
   hidden_dims: [128, 64]
@@ -26,5 +27,5 @@ classifier:
   dropout: 0.3
 
 input:
-  sequence_length: 240  # longer horizon thanks to linear scaling
+  sequence_length: 240     # longer horizon thanks to linear scaling
   feature_dim: 6
