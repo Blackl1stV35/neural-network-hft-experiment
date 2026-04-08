@@ -291,7 +291,9 @@ def main(cfg: DictConfig) -> None:
     class_counts = np.bincount(y_train, minlength=3)
     if class_counts.min() > 0:
         # Inverse frequency weighting, normalized
-        class_weights = 1.0 / class_counts.astype(np.float32)
+        class_weights = 1.0 / np.sqrt(class_counts.astype(np.float32))
+        class_weights = class_weights / class_weights.min()
+        class_weights = np.clip(class_weights, 1.0, 5.0)
         class_weights = class_weights / class_weights.sum() * len(class_weights)
         trainer.criterion = nn.CrossEntropyLoss(
             weight=torch.FloatTensor(class_weights).to(device)
