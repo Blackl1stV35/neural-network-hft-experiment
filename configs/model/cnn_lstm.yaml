@@ -3,25 +3,25 @@ type: cnn_lstm
 
 cnn:
   in_channels: 1
-  channels: [32, 64, 128]
-  kernel_sizes: [3, 3, 3]
-  dropout: 0.2
+  channels: [32, 64, 128]     # per-scale channel count for multi-scale CNN
+  kernel_sizes: [3, 5, 7]     # multi-scale: 3-bar, 5-bar, 7-bar patterns
+  dropout: 0.25
 
 lstm:
-  hidden_size: 128
-  num_layers: 2
-  dropout: 0.3
+  hidden_size: 192
+  num_layers: 3
+  dropout: 0.35
   bidirectional: false
 
 attention:
-  type: temporal
-  heads: 4
-  dim: 128
+  type: causal_temporal
+  heads: 8
+  dim: 192
 
 classifier:
-  hidden_dims: [64, 32]
+  hidden_dims: [128, 64]
   output_dim: 3  # buy, hold, sell
-  dropout: 0.3
+  dropout: 0.4
 
 input:
   sequence_length: 120  # 120 M1 candles = 2 hours
