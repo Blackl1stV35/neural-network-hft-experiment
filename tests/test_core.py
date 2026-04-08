@@ -12,6 +12,7 @@ import torch
 
 # ===== Data Tests =====
 
+
 class TestWindowMinMaxScaler:
     def test_output_range(self):
         from src.data.preprocessing import WindowMinMaxScaler
@@ -81,6 +82,7 @@ class TestCreateSequences:
 
 # ===== Model Tests =====
 
+
 class TestCNNLSTM:
     def test_forward_pass(self):
         from src.models.cnn_lstm import CNNLSTM
@@ -144,6 +146,7 @@ class TestTCN:
 
 
 # ===== RL Tests =====
+
 
 class TestTradingEnv:
     def test_reset_and_step(self):
@@ -211,6 +214,7 @@ class TestReplayBuffer:
 
 # ===== Risk Tests =====
 
+
 class TestCircuitBreaker:
     def test_daily_drawdown_halt(self):
         from src.risk.circuit_breaker import CircuitBreaker
@@ -263,6 +267,7 @@ class TestUncertaintyMonitor:
 
 
 # ===== Backtest Tests =====
+
 
 class TestBacktestEngine:
     def test_buy_and_hold(self):

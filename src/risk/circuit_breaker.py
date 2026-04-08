@@ -64,9 +64,7 @@ class CircuitBreaker:
         # 1. Daily drawdown check
         if abs(self.state.daily_pnl) >= self.max_daily_drawdown and self.state.daily_pnl < 0:
             self.state.is_halted = True
-            self.state.halt_reason = (
-                f"Daily drawdown limit hit: ${self.state.daily_pnl:.2f}"
-            )
+            self.state.halt_reason = f"Daily drawdown limit hit: ${self.state.daily_pnl:.2f}"
             logger.error(f"CIRCUIT BREAKER: {self.state.halt_reason}")
             return False, self.state.halt_reason
 

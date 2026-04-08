@@ -124,9 +124,9 @@ class BacktestResult:
 
     def summary(self) -> str:
         return (
-            f"{'='*50}\n"
+            f"{'=' * 50}\n"
             f"BACKTEST RESULTS\n"
-            f"{'='*50}\n"
+            f"{'=' * 50}\n"
             f"Total Trades:    {self.total_trades}\n"
             f"Win Rate:        {self.win_rate:.1%}\n"
             f"Profit Factor:   {self.profit_factor:.2f}\n"
@@ -137,7 +137,7 @@ class BacktestResult:
             f"Sharpe Ratio:    {self.sharpe_ratio:.2f}\n"
             f"Sortino Ratio:   {self.sortino_ratio:.2f}\n"
             f"Final Balance:   ${self.final_balance:.2f}\n"
-            f"{'='*50}"
+            f"{'=' * 50}"
         )
 
 
@@ -166,9 +166,7 @@ class BacktestEngine:
         """
         self._exit_approval_fn = fn
 
-    def _request_exit_approval(
-        self, position: tuple, price: float, idx: int, reason: str
-    ) -> bool:
+    def _request_exit_approval(self, position: tuple, price: float, idx: int, reason: str) -> bool:
         """Check HITL approval for an exit if enabled.
 
         Returns True if exit is approved (or HITL is disabled).

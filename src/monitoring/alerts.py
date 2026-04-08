@@ -19,7 +19,11 @@ class MetricsCollector:
 
         try:
             from prometheus_client import (
-                Counter, Gauge, Histogram, Summary, start_http_server,
+                Counter,
+                Gauge,
+                Histogram,
+                Summary,
+                start_http_server,
             )
 
             # Trading metrics
@@ -38,15 +42,21 @@ class MetricsCollector:
                 "Model inference latency in milliseconds",
                 buckets=[0.5, 1, 2, 3, 5, 10, 20, 50],
             )
-            self.model_uncertainty = Gauge("trading_model_uncertainty", "Model prediction uncertainty")
+            self.model_uncertainty = Gauge(
+                "trading_model_uncertainty", "Model prediction uncertainty"
+            )
             self.regime = Gauge("trading_regime", "Current market regime", ["regime_name"])
 
             # System metrics
             self.ticks_processed = Counter("trading_ticks_total", "Total ticks processed")
             self.orders_sent = Counter("trading_orders_sent", "Orders sent to broker")
             self.orders_rejected = Counter("trading_orders_rejected", "Orders rejected by broker")
-            self.circuit_breaker_halts = Counter("trading_circuit_breaker_halts", "Circuit breaker activations")
-            self.connection_errors = Counter("trading_connection_errors", "Broker connection errors")
+            self.circuit_breaker_halts = Counter(
+                "trading_circuit_breaker_halts", "Circuit breaker activations"
+            )
+            self.connection_errors = Counter(
+                "trading_connection_errors", "Broker connection errors"
+            )
 
             self._prom_available = True
         except ImportError:
@@ -66,7 +76,9 @@ class MetricsCollector:
         """Record a completed trade."""
         if self._prom_available:
             self.trades_total.labels(direction=direction, result=result).inc()
-            self.pnl_total.set(self.pnl_total._value.get() + pnl if hasattr(self.pnl_total, '_value') else pnl)
+            self.pnl_total.set(
+                self.pnl_total._value.get() + pnl if hasattr(self.pnl_total, "_value") else pnl
+            )
 
     def record_inference(self, latency_ms: float, uncertainty: float) -> None:
         """Record model inference metrics."""
@@ -142,7 +154,9 @@ class TelegramAlerter:
             logger.error(f"Telegram send failed: {e}")
             return False
 
-    def alert_trade(self, direction: str, price: float, volume: float, pnl: Optional[float] = None) -> None:
+    def alert_trade(
+        self, direction: str, price: float, volume: float, pnl: Optional[float] = None
+    ) -> None:
         """Alert on trade execution."""
         msg = f"Trade: {direction.upper()} {volume} lots @ {price:.2f}"
         if pnl is not None:

@@ -29,6 +29,7 @@ from loguru import logger
 # GDELT: Free real-time news API (for LIVE inference)
 # =====================================================================
 
+
 class GDELTFetcher:
     """Fetch gold/macro news from GDELT DOC API.
 
@@ -95,13 +96,15 @@ class GDELTFetcher:
                     if not title:
                         continue
 
-                    all_articles.append({
-                        "text": title,
-                        "source": a.get("domain", "unknown"),
-                        "published_at": a.get("seendate", ""),
-                        "url": a.get("url", ""),
-                        "language": a.get("language", "English"),
-                    })
+                    all_articles.append(
+                        {
+                            "text": title,
+                            "source": a.get("domain", "unknown"),
+                            "published_at": a.get("seendate", ""),
+                            "url": a.get("url", ""),
+                            "language": a.get("language", "English"),
+                        }
+                    )
 
             except Exception as e:
                 logger.warning(f"GDELT fetch failed for query '{query[:40]}': {e}")
@@ -148,6 +151,7 @@ class GDELTFetcher:
 # =====================================================================
 # FinBERT embedding extractor
 # =====================================================================
+
 
 class FinBERTSentiment:
     """Extract rich sentiment embeddings from FinBERT.
@@ -294,6 +298,7 @@ class FinBERTSentiment:
 # Training sentiment builder: FT.com → DAILY consensus embeddings
 # =====================================================================
 
+
 class TrainingSentimentBuilder:
     """Build DAILY time-aligned sentiment embeddings from FT.com article cache.
 
@@ -337,6 +342,7 @@ class TrainingSentimentBuilder:
         for pq_file in sorted(cache_path.glob("*.parquet")):
             try:
                 import polars as pl
+
                 df = pl.read_parquet(str(pq_file))
                 for row in df.iter_rows(named=True):
                     self._articles.append(row)
@@ -348,9 +354,9 @@ class TrainingSentimentBuilder:
             try:
                 dt_str = a.get("published_at", "")
                 if dt_str:
-                    a["_parsed_dt"] = datetime.fromisoformat(
-                        dt_str.replace("Z", "+00:00")
-                    ).replace(tzinfo=None)
+                    a["_parsed_dt"] = datetime.fromisoformat(dt_str.replace("Z", "+00:00")).replace(
+                        tzinfo=None
+                    )
                 else:
                     a["_parsed_dt"] = None
             except ValueError:
@@ -445,8 +451,7 @@ class TrainingSentimentBuilder:
 
         unique_days = sorted(day_to_indices.keys())
         logger.info(
-            f"Building daily embeddings: {len(unique_days)} unique days "
-            f"for {len(timestamps)} bars"
+            f"Building daily embeddings: {len(unique_days)} unique days for {len(timestamps)} bars"
         )
 
         # Check cache for daily embeddings
@@ -468,7 +473,7 @@ class TrainingSentimentBuilder:
             daily_cache[day_key] = emb
 
             if (idx + 1) % 50 == 0:
-                logger.info(f"Daily embedding progress: {idx+1}/{len(unique_days)}")
+                logger.info(f"Daily embedding progress: {idx + 1}/{len(unique_days)}")
 
         # Save daily cache
         if daily_cache_path:
@@ -570,6 +575,7 @@ def load_sentiment_embeddings(
 # =====================================================================
 # Live sentiment service: GDELT → FinBERT → consensus embedding
 # =====================================================================
+
 
 class SentimentService:
     """Live sentiment service for inference.

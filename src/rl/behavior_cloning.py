@@ -31,7 +31,7 @@ class RuleBasedStrategy:
     ) -> np.ndarray:
         """RSI mean-reversion: buy oversold, sell overbought."""
         actions = np.ones(len(rsi), dtype=np.int64)  # default: hold
-        actions[rsi < oversold] = 2   # buy
+        actions[rsi < oversold] = 2  # buy
         actions[rsi > overbought] = 0  # sell
         return actions
 
@@ -150,8 +150,8 @@ class BehaviorCloner:
 
             if (epoch + 1) % 10 == 0:
                 logger.info(
-                    f"BC Epoch {epoch+1}/{epochs} | "
-                    f"Loss: {total_loss/n_batches:.4f} | "
+                    f"BC Epoch {epoch + 1}/{epochs} | "
+                    f"Loss: {total_loss / n_batches:.4f} | "
                     f"Val Acc: {val_acc:.4f}"
                 )
 
@@ -206,9 +206,7 @@ def generate_bc_dataset(
             raise ValueError("RSI data required for rsi strategy")
         actions = rb.rsi_strategy(ta_data["rsi_14"])
     elif strategy == "bollinger":
-        actions = rb.bollinger_strategy(
-            ta_data["close"], ta_data["bb_upper"], ta_data["bb_lower"]
-        )
+        actions = rb.bollinger_strategy(ta_data["close"], ta_data["bb_upper"], ta_data["bb_lower"])
     elif strategy == "trend":
         actions = rb.trend_following(ta_data["ema_9"], ta_data["ema_21"])
     else:

@@ -24,15 +24,17 @@ class TestFullPipeline:
         # Filter weekends
         valid = [i for i, ts in enumerate(timestamps) if ts.weekday() < 5]
 
-        return pl.DataFrame({
-            "timestamp": [timestamps[i] for i in valid],
-            "open": [float(prices[i] + np.random.normal(0, 0.1)) for i in valid],
-            "high": [float(prices[i] + noise[i]) for i in valid],
-            "low": [float(prices[i] - noise[i]) for i in valid],
-            "close": [float(prices[i]) for i in valid],
-            "tick_volume": [int(np.random.randint(50, 500)) for _ in valid],
-            "spread": [int(np.random.randint(15, 35)) for _ in valid],
-        })
+        return pl.DataFrame(
+            {
+                "timestamp": [timestamps[i] for i in valid],
+                "open": [float(prices[i] + np.random.normal(0, 0.1)) for i in valid],
+                "high": [float(prices[i] + noise[i]) for i in valid],
+                "low": [float(prices[i] - noise[i]) for i in valid],
+                "close": [float(prices[i]) for i in valid],
+                "tick_volume": [int(np.random.randint(50, 500)) for _ in valid],
+                "spread": [int(np.random.randint(15, 35)) for _ in valid],
+            }
+        )
 
     def test_data_to_model_prediction(self):
         """Test: raw data → preprocessing → model → predictions."""
@@ -43,7 +45,7 @@ class TestFullPipeline:
         X, y = prepare_dataset(df, seq_length=60, window_size=60)
 
         assert X.shape[1] == 60  # sequence length
-        assert X.shape[2] == 6   # features
+        assert X.shape[2] == 6  # features
         assert len(X) == len(y)
 
         model = CNNLSTM(input_dim=6, output_dim=3)
@@ -126,12 +128,14 @@ class TestFullPipeline:
         assert len(np.unique(labels)) >= 2
 
         # Train classifier
-        features = np.column_stack([
-            volatility,
-            np.gradient(close),
-            np.convolve(close, np.ones(20) / 20, mode="same"),
-            np.random.randn(n),
-        ])
+        features = np.column_stack(
+            [
+                volatility,
+                np.gradient(close),
+                np.convolve(close, np.ones(20) / 20, mode="same"),
+                np.random.randn(n),
+            ]
+        )
 
         clf = RegimeClassifier()
         metrics = clf.train(features[100:], labels[100:])
@@ -173,10 +177,16 @@ class TestFullPipeline:
         from src.models.mamba_encoder import MambaSSMModel
 
         model = MambaSSMModel(
-            input_dim=6, d_model=32, n_layers=2,
-            d_state=8, d_conv=4, expand_factor=2,
-            sentiment_dim=768, ta_dim=12,
-            fusion_hidden=64, output_dim=3,
+            input_dim=6,
+            d_model=32,
+            n_layers=2,
+            d_state=8,
+            d_conv=4,
+            expand_factor=2,
+            sentiment_dim=768,
+            ta_dim=12,
+            fusion_hidden=64,
+            output_dim=3,
         )
         model.eval()
 

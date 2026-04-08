@@ -119,9 +119,7 @@ class ONNXInferenceEngine:
         else:
             providers = ["CPUExecutionProvider"]
 
-        self.session = ort.InferenceSession(
-            model_path, session_opts, providers=providers
-        )
+        self.session = ort.InferenceSession(model_path, session_opts, providers=providers)
 
         # Cache input/output names
         self.input_names = [inp.name for inp in self.session.get_inputs()]
@@ -138,16 +136,12 @@ class ONNXInferenceEngine:
     def _warmup(self, n_runs: int = 10) -> None:
         """Warm up the inference engine to stabilize latency."""
         input_shapes = {
-            inp.name: [
-                d if isinstance(d, int) else 1
-                for d in inp.shape
-            ]
+            inp.name: [d if isinstance(d, int) else 1 for d in inp.shape]
             for inp in self.session.get_inputs()
         }
 
         dummy_feeds = {
-            name: np.random.randn(*shape).astype(np.float32)
-            for name, shape in input_shapes.items()
+            name: np.random.randn(*shape).astype(np.float32) for name, shape in input_shapes.items()
         }
 
         for _ in range(n_runs):

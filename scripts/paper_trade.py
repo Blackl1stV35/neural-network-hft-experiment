@@ -141,15 +141,21 @@ class TradingLoop:
 
                 # Update buffers
                 self.price_buffer.append(tick["bid"])
-                self.feature_buffer.append([
-                    tick["bid"], tick["bid"] + 0.5, tick["bid"] - 0.5,
-                    tick["bid"], 100, tick.get("spread", 20),
-                ])
+                self.feature_buffer.append(
+                    [
+                        tick["bid"],
+                        tick["bid"] + 0.5,
+                        tick["bid"] - 0.5,
+                        tick["bid"],
+                        100,
+                        tick.get("spread", 20),
+                    ]
+                )
 
                 # Keep buffer bounded
                 if len(self.price_buffer) > self.buffer_size:
-                    self.price_buffer = self.price_buffer[-self.buffer_size:]
-                    self.feature_buffer = self.feature_buffer[-self.buffer_size:]
+                    self.price_buffer = self.price_buffer[-self.buffer_size :]
+                    self.feature_buffer = self.feature_buffer[-self.buffer_size :]
 
                 # Need enough data for a sequence
                 seq_length = 120
@@ -180,12 +186,12 @@ class TradingLoop:
                     pos_dir = self.order_manager.state.current_position_direction
                     ctx_dir = "LONG" if pos_dir == 1 else "SHORT" if pos_dir == -1 else "FLAT"
                     reason = result.get("block_reason", result.get("action_taken", ""))
-                    print(f"\n{'='*50}")
+                    print(f"\n{'=' * 50}")
                     print(f"  EXIT APPROVAL REQUESTED")
                     print(f"  Position:  {ctx_dir}")
                     print(f"  Price:     {tick['bid']:.2f}")
                     print(f"  Reason:    {reason}")
-                    print(f"{'='*50}")
+                    print(f"{'=' * 50}")
                     resp = input("  Approve exit? (y/n): ").strip().lower()
                     if resp not in ("y", "yes"):
                         logger.info("HITL: Exit vetoed by human operator")
@@ -199,7 +205,7 @@ class TradingLoop:
                     logger.info(
                         f"Tick {tick_count} | "
                         f"Price: {tick['bid']:.2f} | "
-                        f"Action: {['SELL','HOLD','BUY'][action]} ({confidence:.2f}) | "
+                        f"Action: {['SELL', 'HOLD', 'BUY'][action]} ({confidence:.2f}) | "
                         f"Latency: {latency:.1f}ms | "
                         f"Position: {status['position']}"
                     )
@@ -245,6 +251,7 @@ class SyntheticBroker:
 
     def buy(self, volume, comment=""):
         from src.execution.broker_mt5 import OrderResult
+
         ticket = self._next_ticket
         self._next_ticket += 1
         self._positions[ticket] = {"type": "buy", "volume": volume}
@@ -252,6 +259,7 @@ class SyntheticBroker:
 
     def sell(self, volume, comment=""):
         from src.execution.broker_mt5 import OrderResult
+
         ticket = self._next_ticket
         self._next_ticket += 1
         self._positions[ticket] = {"type": "sell", "volume": volume}
@@ -259,6 +267,7 @@ class SyntheticBroker:
 
     def close_position(self, ticket):
         from src.execution.broker_mt5 import OrderResult
+
         self._positions.pop(ticket, None)
         return OrderResult(success=True, ticket=ticket, price=2000.0, latency_ms=0.1)
 

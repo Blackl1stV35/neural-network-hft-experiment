@@ -16,8 +16,13 @@ class MT5DataSource:
     """Ingest tick and OHLCV data from MetaTrader 5."""
 
     TIMEFRAME_MAP = {
-        "M1": 1, "M5": 5, "M15": 15, "M30": 30,
-        "H1": 16385, "H4": 16388, "D1": 16408,
+        "M1": 1,
+        "M5": 5,
+        "M15": 15,
+        "M30": 30,
+        "H1": 16385,
+        "H4": 16388,
+        "D1": 16408,
     }
 
     def __init__(self, symbol: str = "XAUUSD", timeframe: str = "M1"):
@@ -70,15 +75,17 @@ class MT5DataSource:
             logger.warning(f"No data returned for {self.symbol} {self.timeframe}")
             return pl.DataFrame()
 
-        df = pl.DataFrame({
-            "timestamp": [datetime.fromtimestamp(r[0]) for r in rates],
-            "open": [float(r[1]) for r in rates],
-            "high": [float(r[2]) for r in rates],
-            "low": [float(r[3]) for r in rates],
-            "close": [float(r[4]) for r in rates],
-            "tick_volume": [int(r[5]) for r in rates],
-            "spread": [int(r[6]) for r in rates],
-        })
+        df = pl.DataFrame(
+            {
+                "timestamp": [datetime.fromtimestamp(r[0]) for r in rates],
+                "open": [float(r[1]) for r in rates],
+                "high": [float(r[2]) for r in rates],
+                "low": [float(r[3]) for r in rates],
+                "close": [float(r[4]) for r in rates],
+                "tick_volume": [int(r[5]) for r in rates],
+                "spread": [int(r[6]) for r in rates],
+            }
+        )
 
         logger.info(f"Fetched {len(df)} bars for {self.symbol} [{start} → {end}]")
         return df
@@ -95,14 +102,16 @@ class MT5DataSource:
         if ticks is None or len(ticks) == 0:
             return pl.DataFrame()
 
-        df = pl.DataFrame({
-            "timestamp": [datetime.fromtimestamp(t[0]) for t in ticks],
-            "bid": [float(t[1]) for t in ticks],
-            "ask": [float(t[2]) for t in ticks],
-            "last": [float(t[3]) for t in ticks],
-            "volume": [float(t[4]) for t in ticks],
-            "flags": [int(t[5]) for t in ticks],
-        })
+        df = pl.DataFrame(
+            {
+                "timestamp": [datetime.fromtimestamp(t[0]) for t in ticks],
+                "bid": [float(t[1]) for t in ticks],
+                "ask": [float(t[2]) for t in ticks],
+                "last": [float(t[3]) for t in ticks],
+                "volume": [float(t[4]) for t in ticks],
+                "flags": [int(t[5]) for t in ticks],
+            }
+        )
         return df
 
     def stream_ticks(self, callback: Callable[[dict], None], poll_ms: int = 100) -> None:

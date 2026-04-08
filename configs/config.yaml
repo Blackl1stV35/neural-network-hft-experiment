@@ -14,7 +14,7 @@ defaults:
 project:
   name: xauusd-trading
   seed: 42
-  device: auto  # auto | cpu | cuda
+  device: cuda  # auto | cpu | cuda
 
 # ============================================================
 # TRAINING

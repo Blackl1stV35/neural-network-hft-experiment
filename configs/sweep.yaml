@@ -3,22 +3,16 @@
 #
 # Usage:
 #   wandb sweep configs/sweep.yaml
-#   wandb agent <sweep_id>
+#   python -m wandb agent <sweep_id>
 #
-# This sweep addresses the critical issues found in the 8-Apr experiment:
-#   1. Near-zero hold class (101/330k) → labeling parameters need widening
-#   2. ~60% accuracy ≈ majority-class baseline → model not learning signal
-#   3. Mamba NaN losses → numerical stability
-#   4. Val loss diverging by epoch 10 → overfitting
-#   5. Backtest PF <1 with >100% drawdown → no edge
+# This sweep explores labeling, architecture, and training hyperparameters.
 
+program: D:/xauusd-trading/venv/Scripts/python.exe
 command:
-  - ${env}
-  - python
   - ${program}
+  - scripts/train.py
   - ${args_no_hyphens}
 
-program: scripts/train.py
 method: bayes
 metric:
   name: val/loss
@@ -95,7 +89,6 @@ parameters:
     min: 0.05
     max: 0.3
 
-  # Fusion block stub (needed for Hydra)
   model.fusion.hidden_dim:
     distribution: categorical
     values: [128, 256, 512]
@@ -158,7 +151,7 @@ parameters:
   project.seed:
     value: 42
   project.device:
-    value: auto
+    value: cuda   # force GPU usage
   training.num_workers:
     value: 4
   training.val_split:

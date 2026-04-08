@@ -27,8 +27,10 @@ class CausalTemporalAttention(nn.Module):
     def __init__(self, hidden_dim: int, n_heads: int = 4, dropout: float = 0.1):
         super().__init__()
         self.attention = nn.MultiheadAttention(
-            embed_dim=hidden_dim, num_heads=n_heads,
-            batch_first=True, dropout=dropout,
+            embed_dim=hidden_dim,
+            num_heads=n_heads,
+            batch_first=True,
+            dropout=dropout,
         )
         self.norm = nn.LayerNorm(hidden_dim)
         self.hidden_dim = hidden_dim
@@ -53,7 +55,7 @@ class CausalTemporalAttention(nn.Module):
 
         # Weighted pooling using learned attention scores from last position
         weights = torch.softmax(attn_out.mean(dim=-1), dim=-1)  # (batch, seq_len)
-        pooled = (attn_out * weights.unsqueeze(-1)).sum(dim=1)   # (batch, hidden_dim)
+        pooled = (attn_out * weights.unsqueeze(-1)).sum(dim=1)  # (batch, hidden_dim)
         return pooled
 
 
@@ -121,12 +123,14 @@ class CNNBlock(nn.Module):
         layers = []
         ch_in = in_channels
         for ch_out, ks in zip(channels, kernel_sizes):
-            layers.extend([
-                nn.Conv1d(ch_in, ch_out, kernel_size=ks, padding=ks // 2),
-                nn.BatchNorm1d(ch_out),
-                nn.GELU(),
-                nn.Dropout(dropout),
-            ])
+            layers.extend(
+                [
+                    nn.Conv1d(ch_in, ch_out, kernel_size=ks, padding=ks // 2),
+                    nn.BatchNorm1d(ch_out),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                ]
+            )
             ch_in = ch_out
         self.cnn = nn.Sequential(*layers)
         self.out_channels = channels[-1]
@@ -235,9 +239,7 @@ class CNNLSTM(nn.Module):
         if use_multiscale_cnn:
             per_scale = cnn_channels[-1] // len(cnn_kernel_sizes) if cnn_channels else 64
             per_scale = max(per_scale, 32)
-            self.cnn = MultiScaleCNNBlock(
-                input_dim, per_scale, cnn_kernel_sizes, cnn_dropout
-            )
+            self.cnn = MultiScaleCNNBlock(input_dim, per_scale, cnn_kernel_sizes, cnn_dropout)
             cnn_out = self.cnn.out_channels
         else:
             self.cnn = CNNBlock(input_dim, cnn_channels, cnn_kernel_sizes, cnn_dropout)
@@ -270,11 +272,13 @@ class CNNLSTM(nn.Module):
         layers = []
         dim_in = lstm_out
         for dim_out in classifier_dims:
-            layers.extend([
-                nn.Linear(dim_in, dim_out),
-                nn.GELU(),
-                nn.Dropout(classifier_dropout),
-            ])
+            layers.extend(
+                [
+                    nn.Linear(dim_in, dim_out),
+                    nn.GELU(),
+                    nn.Dropout(classifier_dropout),
+                ]
+            )
             dim_in = dim_out
         layers.append(nn.Linear(dim_in, output_dim))
         self.classifier = nn.Sequential(*layers)

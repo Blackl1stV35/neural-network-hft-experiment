@@ -143,7 +143,9 @@ class OrderManager:
             return result
 
         # Calculate position size
-        cb_multiplier = self.circuit_breaker.get_position_size(self.base_lot_size) / self.base_lot_size
+        cb_multiplier = (
+            self.circuit_breaker.get_position_size(self.base_lot_size) / self.base_lot_size
+        )
         vol_multiplier = 1.0
         if uncertainty.should_reduce:
             vol_multiplier = 0.5

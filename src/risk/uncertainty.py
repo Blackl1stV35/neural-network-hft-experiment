@@ -19,9 +19,9 @@ from loguru import logger
 class UncertaintySignals:
     """Aggregated uncertainty signals from all sources."""
 
-    model_uncertainty: float = 0.0        # MC Dropout / ensemble std
-    regime_confidence: float = 1.0         # regime classifier confidence
-    distribution_shift: float = 0.0        # OOD score
+    model_uncertainty: float = 0.0  # MC Dropout / ensemble std
+    regime_confidence: float = 1.0  # regime classifier confidence
+    distribution_shift: float = 0.0  # OOD score
     should_exit: bool = False
     should_reduce: bool = False
     exit_reason: str = ""
@@ -75,9 +75,7 @@ class UncertaintyMonitor:
 
         # OOD detection via Mahalanobis-like distance
         if current_features is not None and self._calibrated:
-            z_scores = np.abs(
-                (current_features - self._feature_means) / self._feature_stds
-            )
+            z_scores = np.abs((current_features - self._feature_means) / self._feature_stds)
             signals.distribution_shift = float(z_scores.mean())
 
         # Decision logic
@@ -96,11 +94,13 @@ class UncertaintyMonitor:
             reasons.append(f"OOD_score={signals.distribution_shift:.3f}")
 
         # If multiple signals fire simultaneously, escalate to exit
-        n_warnings = sum([
-            model_uncertainty > self.model_threshold,
-            regime_confidence < self.regime_threshold,
-            signals.distribution_shift > self.ood_threshold * 0.7,
-        ])
+        n_warnings = sum(
+            [
+                model_uncertainty > self.model_threshold,
+                regime_confidence < self.regime_threshold,
+                signals.distribution_shift > self.ood_threshold * 0.7,
+            ]
+        )
         if n_warnings >= 2:
             signals.should_exit = True
             reasons.append("multiple_uncertainty_signals")

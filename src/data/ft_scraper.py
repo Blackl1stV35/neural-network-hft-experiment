@@ -37,29 +37,70 @@ NS_IMAGE = "{http://www.google.com/schemas/sitemap-image/1.1}"
 # Gold/macro keywords for filtering relevant articles
 GOLD_MACRO_KEYWORDS = [
     # Direct gold
-    "gold", "xauusd", "bullion", "precious metal",
+    "gold",
+    "xauusd",
+    "bullion",
+    "precious metal",
     # Central banks / monetary policy
-    "federal reserve", "fomc", "interest rate", "rate decision", "rate cut",
-    "rate hike", "monetary policy", "quantitative", "tightening", "easing",
-    "central bank", "ecb", "boj", "pboc",
+    "federal reserve",
+    "fomc",
+    "interest rate",
+    "rate decision",
+    "rate cut",
+    "rate hike",
+    "monetary policy",
+    "quantitative",
+    "tightening",
+    "easing",
+    "central bank",
+    "ecb",
+    "boj",
+    "pboc",
     # Inflation / yields
-    "inflation", "cpi", "ppi", "treasury yield", "bond yield", "real yield",
-    "deflation", "stagflation",
+    "inflation",
+    "cpi",
+    "ppi",
+    "treasury yield",
+    "bond yield",
+    "real yield",
+    "deflation",
+    "stagflation",
     # Dollar / FX
-    "dollar index", "dxy", "dollar strength", "dollar weakness",
-    "currency", "forex", "usd",
+    "dollar index",
+    "dxy",
+    "dollar strength",
+    "dollar weakness",
+    "currency",
+    "forex",
+    "usd",
     # Geopolitical / safe haven
-    "safe haven", "geopolitical", "war", "conflict", "sanctions",
-    "trade war", "tariff",
+    "safe haven",
+    "geopolitical",
+    "war",
+    "conflict",
+    "sanctions",
+    "trade war",
+    "tariff",
     # Economic indicators
-    "nonfarm", "payroll", "unemployment", "gdp", "retail sales",
-    "manufacturing", "pmi", "consumer confidence",
+    "nonfarm",
+    "payroll",
+    "unemployment",
+    "gdp",
+    "retail sales",
+    "manufacturing",
+    "pmi",
+    "consumer confidence",
     # Commodities context
-    "commodity", "oil price", "silver", "copper",
+    "commodity",
+    "oil price",
+    "silver",
+    "copper",
 ]
 
 # Compile keyword patterns for fast matching
-_KEYWORD_PATTERNS = [re.compile(rf"\b{re.escape(kw)}\b", re.IGNORECASE) for kw in GOLD_MACRO_KEYWORDS]
+_KEYWORD_PATTERNS = [
+    re.compile(rf"\b{re.escape(kw)}\b", re.IGNORECASE) for kw in GOLD_MACRO_KEYWORDS
+]
 
 
 @dataclass
@@ -152,6 +193,7 @@ class FTSitemapScraper:
         # curl_cffi session for sitemap XML (fast, no JS needed)
         try:
             from curl_cffi.requests import Session as CurlSession
+
             self._curl = CurlSession(impersonate="chrome")
             self._use_curl = True
         except ImportError:
@@ -160,12 +202,14 @@ class FTSitemapScraper:
                 "Install for better reliability: pip install curl_cffi"
             )
             self._curl = requests.Session()
-            self._curl.headers.update({
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
-                ),
-            })
+            self._curl.headers.update(
+                {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+                    ),
+                }
+            )
             self._use_curl = False
 
         # Playwright browser (lazy-initialized via setup())
@@ -205,12 +249,14 @@ class FTSitemapScraper:
                 c = c.strip()
                 if "=" in c:
                     name, value = c.split("=", 1)
-                    cookie_list.append({
-                        "name": name.strip(),
-                        "value": value.strip(),
-                        "domain": ".ft.com",
-                        "path": "/",
-                    })
+                    cookie_list.append(
+                        {
+                            "name": name.strip(),
+                            "value": value.strip(),
+                            "domain": ".ft.com",
+                            "path": "/",
+                        }
+                    )
             if cookie_list:
                 await self._context.add_cookies(cookie_list)
 
@@ -262,7 +308,7 @@ class FTSitemapScraper:
                 else:
                     logger.warning(f"HTTP {resp.status_code} on sitemap {url}")
             except Exception as e:
-                logger.warning(f"Sitemap fetch failed ({attempt+1}/{self.max_retries}): {e}")
+                logger.warning(f"Sitemap fetch failed ({attempt + 1}/{self.max_retries}): {e}")
                 time.sleep(5 * (attempt + 1))
 
         return None
@@ -465,11 +511,13 @@ class FTSitemapScraper:
                     image_caption = caption_elem.text.strip()
 
             if loc and "/content/" in loc:
-                articles.append({
-                    "url": loc,
-                    "lastmod": lastmod,
-                    "image_caption": image_caption,
-                })
+                articles.append(
+                    {
+                        "url": loc,
+                        "lastmod": lastmod,
+                        "image_caption": image_caption,
+                    }
+                )
 
         logger.info(f"Parsed {len(articles)} article URLs from {archive_url}")
         return articles
@@ -527,7 +575,8 @@ class FTSitemapScraper:
             # Pre-filter by image caption keywords to avoid fetching irrelevant pages
             if keywords_prefilter:
                 article_entries = [
-                    a for a in article_entries
+                    a
+                    for a in article_entries
                     if _relevance_score(a.get("image_caption", "")) > 0
                     or not a.get("image_caption")
                 ]
@@ -542,10 +591,7 @@ class FTSitemapScraper:
                     continue
 
                 # Use JSON-LD datePublished if available, fall back to sitemap lastmod
-                published_at = (
-                    content.get("date_published")
-                    or entry.get("lastmod", "")
-                )
+                published_at = content.get("date_published") or entry.get("lastmod", "")
 
                 article = FTArticle(
                     url=entry["url"],
@@ -564,7 +610,9 @@ class FTSitemapScraper:
                 if article.relevance_score >= min_relevance:
                     all_articles.append(article)
                     fetched_count += 1
-                    logger.debug(f"Relevant [{article.relevance_score:.3f}]: {article.headline[:80]}")
+                    logger.debug(
+                        f"Relevant [{article.relevance_score:.3f}]: {article.headline[:80]}"
+                    )
 
             logger.info(
                 f"Archive complete: {fetched_count} relevant articles "

@@ -100,7 +100,7 @@ class PrioritizedReplayBuffer:
 
         # Compute sampling probabilities
         priorities = self.priorities[: self.buffer.size]
-        probs = priorities ** self.alpha
+        probs = priorities**self.alpha
         probs /= probs.sum()
 
         indices = np.random.choice(self.buffer.size, size=batch_size, p=probs, replace=False)

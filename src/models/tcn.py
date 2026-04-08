@@ -14,7 +14,9 @@ class CausalConv1d(nn.Module):
         super().__init__()
         self.padding = (kernel_size - 1) * dilation
         self.conv = weight_norm(
-            nn.Conv1d(in_channels, out_channels, kernel_size, dilation=dilation, padding=self.padding)
+            nn.Conv1d(
+                in_channels, out_channels, kernel_size, dilation=dilation, padding=self.padding
+            )
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -45,7 +47,9 @@ class TemporalBlock(nn.Module):
 
         # Residual connection (match channels if needed)
         self.residual = (
-            nn.Conv1d(in_channels, out_channels, 1) if in_channels != out_channels else nn.Identity()
+            nn.Conv1d(in_channels, out_channels, 1)
+            if in_channels != out_channels
+            else nn.Identity()
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -76,7 +80,7 @@ class TCN(nn.Module):
         layers = []
         in_ch = input_dim
         for i, out_ch in enumerate(channels):
-            dilation = 2 ** i
+            dilation = 2**i
             layers.append(TemporalBlock(in_ch, out_ch, kernel_size, dilation, dropout))
             in_ch = out_ch
 
@@ -87,11 +91,13 @@ class TCN(nn.Module):
         clf_layers = []
         dim_in = channels[-1]
         for dim_out in classifier_dims:
-            clf_layers.extend([
-                nn.Linear(dim_in, dim_out),
-                nn.GELU(),
-                nn.Dropout(dropout),
-            ])
+            clf_layers.extend(
+                [
+                    nn.Linear(dim_in, dim_out),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                ]
+            )
             dim_in = dim_out
         clf_layers.append(nn.Linear(dim_in, output_dim))
         self.classifier = nn.Sequential(*clf_layers)
@@ -104,7 +110,7 @@ class TCN(nn.Module):
             logits: (batch, output_dim)
         """
         x = x.permute(0, 2, 1)  # (batch, features, seq_len) for Conv1d
-        features = self.tcn(x)   # (batch, channels[-1], seq_len)
+        features = self.tcn(x)  # (batch, channels[-1], seq_len)
         pooled = features.mean(dim=2)  # global average pooling
         return self.classifier(pooled)
 
@@ -120,6 +126,6 @@ class TCN(nn.Module):
         kernel_size = 3  # assuming uniform
         rf = 1
         for i in range(n_layers):
-            dilation = 2 ** i
+            dilation = 2**i
             rf += 2 * (kernel_size - 1) * dilation
         return rf

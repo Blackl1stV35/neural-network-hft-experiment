@@ -109,8 +109,9 @@ def main(cfg: DictConfig) -> None:
 
     # HITL exit approval — console prompt for every exit
     if bt_config.human_exit_approval:
+
         def console_exit_approval(ctx: dict) -> bool:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"  EXIT APPROVAL REQUESTED")
             print(f"  Position:  {ctx['direction']}")
             print(f"  Entry:     {ctx['entry_price']}")
@@ -118,7 +119,7 @@ def main(cfg: DictConfig) -> None:
             print(f"  PnL:       {ctx['unrealized_pnl_pips']} pips")
             print(f"  Hold time: {ctx['hold_time']} bars")
             print(f"  Reason:    {ctx['exit_reason']}")
-            print(f"{'='*50}")
+            print(f"{'=' * 50}")
             while True:
                 resp = input("  Approve exit? (y/n): ").strip().lower()
                 if resp in ("y", "yes"):

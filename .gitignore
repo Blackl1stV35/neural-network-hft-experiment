@@ -23,6 +23,7 @@ data/*.duckdb
 data/*.csv
 data/*.parquet
 data/sentiment_cache/
+data/* 
 
 # Models (tracked by DVC)
 models/*.pt

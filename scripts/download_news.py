@@ -33,16 +33,20 @@ def get_price_date_range(duckdb_path: str = "data/ticks.duckdb"):
 
     start = df["timestamp"].min()
     end = df["timestamp"].max()
-    print(f"📅 Detected price data range: {start.date()} → {end.date()} ({(end-start).days} days)")
+    print(
+        f"📅 Detected price data range: {start.date()} → {end.date()} ({(end - start).days} days)"
+    )
     return start, end
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--days", type=int, default=365,
-                        help="Number of days to fetch (default: 365)")
-    parser.add_argument("--output", type=str, default="data/news",
-                        help="Folder to save raw news dataset")
+    parser.add_argument(
+        "--days", type=int, default=365, help="Number of days to fetch (default: 365)"
+    )
+    parser.add_argument(
+        "--output", type=str, default="data/news", help="Folder to save raw news dataset"
+    )
     args = parser.parse_args()
 
     # Create output folder
@@ -61,7 +65,7 @@ def main():
 
     fetcher = FTSitemapFetcher()
 
-    articles = fetcher.fetch(hours_back=365*24)   # wide window
+    articles = fetcher.fetch(hours_back=365 * 24)  # wide window
 
     # Filter to match price data range
     filtered = []

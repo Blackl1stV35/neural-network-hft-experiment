@@ -57,7 +57,7 @@ async def scrape(args):
             max_articles_per_month=args.max_per_month,
         )
 
-        logger.info(f"\n{'='*60}")
+        logger.info(f"\n{'=' * 60}")
         logger.info(f"Scraping complete: {len(articles)} relevant articles")
         logger.info(f"Date range: {args.start} → {args.end}")
         logger.info(f"Cache dir: {args.cache_dir}")
@@ -75,7 +75,9 @@ async def scrape(args):
             logger.info(f"\nStats:")
             logger.info(f"  Average relevance: {avg_relevance:.4f}")
             logger.info(f"  Articles with body text: {with_body}/{len(articles)}")
-            logger.info(f"  Date range: {articles[0].published_at[:10]} → {articles[-1].published_at[:10]}")
+            logger.info(
+                f"  Date range: {articles[0].published_at[:10]} → {articles[-1].published_at[:10]}"
+            )
 
         # Also save as Parquet for easy Polars/Pandas access
         if articles:

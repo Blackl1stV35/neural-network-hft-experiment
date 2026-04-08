@@ -20,12 +20,15 @@ def build_model(cfg: DictConfig) -> nn.Module:
 
     if model_type == "cnn_lstm":
         from src.models.cnn_lstm import CNNLSTM
+
         model = CNNLSTM.from_config(cfg)
     elif model_type == "mamba_ssm":
         from src.models.mamba_encoder import MambaSSMModel
+
         model = MambaSSMModel.from_config(cfg)
     elif model_type == "tcn":
         from src.models.tcn import TCN
+
         model = TCN(
             input_dim=cfg.input.feature_dim,
             channels=cfg.tcn.channels,
@@ -39,7 +42,5 @@ def build_model(cfg: DictConfig) -> nn.Module:
 
     n_params = sum(p.numel() for p in model.parameters())
     n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logger.info(
-        f"Built {model_type}: {n_params:,} params ({n_trainable:,} trainable)"
-    )
+    logger.info(f"Built {model_type}: {n_params:,} params ({n_trainable:,} trainable)")
     return model

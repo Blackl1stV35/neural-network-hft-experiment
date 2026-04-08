@@ -186,14 +186,17 @@ class DiscreteSACAgent:
             tp.data.copy_(self.tau * sp.data + (1 - self.tau) * tp.data)
 
     def save(self, path: str) -> None:
-        torch.save({
-            "actor": self.actor.state_dict(),
-            "q1": self.q1.state_dict(),
-            "q2": self.q2.state_dict(),
-            "q1_target": self.q1_target.state_dict(),
-            "q2_target": self.q2_target.state_dict(),
-            "train_step": self.train_step,
-        }, path)
+        torch.save(
+            {
+                "actor": self.actor.state_dict(),
+                "q1": self.q1.state_dict(),
+                "q2": self.q2.state_dict(),
+                "q1_target": self.q1_target.state_dict(),
+                "q2_target": self.q2_target.state_dict(),
+                "train_step": self.train_step,
+            },
+            path,
+        )
 
     def load(self, path: str) -> None:
         data = torch.load(path, map_location=self.device)

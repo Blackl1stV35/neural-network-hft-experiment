@@ -35,12 +35,15 @@ def main():
     # Load model
     if args.model == "cnn_lstm":
         from src.models.cnn_lstm import CNNLSTM
+
         model = CNNLSTM(input_dim=args.feature_dim)
     elif args.model == "mamba_ssm":
         from src.models.mamba_encoder import MambaSSMModel
+
         model = MambaSSMModel(input_dim=args.feature_dim)
     elif args.model == "tcn":
         from src.models.tcn import TCN
+
         model = TCN(input_dim=args.feature_dim)
     else:
         raise ValueError(f"Unknown model: {args.model}")

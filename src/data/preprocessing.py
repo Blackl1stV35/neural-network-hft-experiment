@@ -172,9 +172,7 @@ def create_sequences(
 
 def remove_weekends(df: pl.DataFrame) -> pl.DataFrame:
     """Remove weekend data (Saturday/Sunday market close)."""
-    return df.filter(
-        pl.col("timestamp").dt.weekday().is_in([1, 2, 3, 4, 5])
-    )
+    return df.filter(pl.col("timestamp").dt.weekday().is_in([1, 2, 3, 4, 5]))
 
 
 def fill_gaps(df: pl.DataFrame, method: str = "forward_fill") -> pl.DataFrame:
@@ -230,8 +228,5 @@ def prepare_dataset(
     # Create sequences
     X, y = create_sequences(features_scaled, labels, seq_length)
 
-    logger.info(
-        f"Dataset prepared: X={X.shape}, y={y.shape}, "
-        f"class distribution: {np.bincount(y)}"
-    )
+    logger.info(f"Dataset prepared: X={X.shape}, y={y.shape}, class distribution: {np.bincount(y)}")
     return X, y

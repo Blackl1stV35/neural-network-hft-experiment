@@ -67,9 +67,17 @@ def main():
 
     # Prepare features for classifier
     regime_feature_cols = [
-        "volatility_20", "trend_strength", "volume_profile",
-        "rsi_14", "atr_14", "bb_width", "body_ratio",
-        "return_1", "return_5", "return_20", "range_pct",
+        "volatility_20",
+        "trend_strength",
+        "volume_profile",
+        "rsi_14",
+        "atr_14",
+        "bb_width",
+        "body_ratio",
+        "return_1",
+        "return_5",
+        "return_20",
+        "range_pct",
     ]
     available_cols = [c for c in regime_feature_cols if c in df.columns]
     features = df.select(available_cols).to_numpy().astype(np.float32)

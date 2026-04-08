@@ -100,11 +100,14 @@ class TradingEnv(gym.Env):
         feat = self.features[self.current_step]
 
         if self.position:
-            pos_info = np.array([
-                float(self.position.direction),
-                self.position.unrealized_pnl / self.initial_balance,
-                (self.current_step - self.position.entry_step) / self.exec.max_position_time,
-            ], dtype=np.float32)
+            pos_info = np.array(
+                [
+                    float(self.position.direction),
+                    self.position.unrealized_pnl / self.initial_balance,
+                    (self.current_step - self.position.entry_step) / self.exec.max_position_time,
+                ],
+                dtype=np.float32,
+            )
         else:
             pos_info = np.zeros(3, dtype=np.float32)
 
@@ -137,20 +140,24 @@ class TradingEnv(gym.Env):
         cost = self._execute_spread_slippage(self.position.direction)
         exit_price = price - cost * self.position.direction
 
-        pnl_pips = (exit_price - self.position.entry_price) * self.position.direction / self.exec.pip_value
+        pnl_pips = (
+            (exit_price - self.position.entry_price) * self.position.direction / self.exec.pip_value
+        )
         pnl_usd = pnl_pips * self.exec.pip_usd_per_lot * (self.position.size / 0.01)
         pnl_usd -= self.exec.commission_per_lot * 0.5  # half commission on close
 
-        self.trade_log.append({
-            "entry_step": self.position.entry_step,
-            "exit_step": self.current_step,
-            "direction": self.position.direction,
-            "entry_price": self.position.entry_price,
-            "exit_price": exit_price,
-            "pnl_pips": pnl_pips,
-            "pnl_usd": pnl_usd,
-            "hold_time": self.current_step - self.position.entry_step,
-        })
+        self.trade_log.append(
+            {
+                "entry_step": self.position.entry_step,
+                "exit_step": self.current_step,
+                "direction": self.position.direction,
+                "entry_price": self.position.entry_price,
+                "exit_price": exit_price,
+                "pnl_pips": pnl_pips,
+                "pnl_usd": pnl_usd,
+                "hold_time": self.current_step - self.position.entry_step,
+            }
+        )
 
         self.position = None
         return pnl_usd
@@ -165,7 +172,10 @@ class TradingEnv(gym.Env):
         action = Action(action)
 
         # Force close if max hold time exceeded
-        if self.position and (self.current_step - self.position.entry_step) >= self.exec.max_position_time:
+        if (
+            self.position
+            and (self.current_step - self.position.entry_step) >= self.exec.max_position_time
+        ):
             reward += self._close_position()
 
         # Execute action
@@ -187,7 +197,8 @@ class TradingEnv(gym.Env):
         if self.position:
             price = self.prices[self.current_step]
             self.position.unrealized_pnl = (
-                (price - self.position.entry_price) * self.position.direction
+                (price - self.position.entry_price)
+                * self.position.direction
                 / self.exec.pip_value
                 * self.exec.pip_usd_per_lot
                 * (self.position.size / 0.01)
@@ -212,8 +223,10 @@ class TradingEnv(gym.Env):
             "position": self.position.direction if self.position else 0,
         }
 
-        obs = self._get_obs() if not (terminated or truncated) else np.zeros(
-            self.observation_space.shape, dtype=np.float32
+        obs = (
+            self._get_obs()
+            if not (terminated or truncated)
+            else np.zeros(self.observation_space.shape, dtype=np.float32)
         )
         return obs, reward, terminated, truncated, info
 

@@ -33,7 +33,9 @@ from loguru import logger
 class Trainer:
     """Model training loop with early stopping and mixed precision."""
 
-    def __init__(self, cfg: DictConfig, model: nn.Module, device: torch.device, use_sentiment: bool = False):
+    def __init__(
+        self, cfg: DictConfig, model: nn.Module, device: torch.device, use_sentiment: bool = False
+    ):
         self.cfg = cfg
         self.model = model.to(device)
         self.device = device
@@ -76,7 +78,7 @@ class Trainer:
 
     def _forward(self, X, S):
         """Forward pass, optionally passing sentiment to the model."""
-        if S is not None and hasattr(self.model, 'fusion'):
+        if S is not None and hasattr(self.model, "fusion"):
             # Model supports sentiment (MambaSSMModel)
             return self.model(X, sentiment=S)
         else:
@@ -101,18 +103,14 @@ class Trainer:
                     loss = self.criterion(logits, y_batch)
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(self.optimizer)
-                nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.cfg.training.gradient_clip
-                )
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.gradient_clip)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
                 logits = self._forward(X_batch, S_batch)
                 loss = self.criterion(logits, y_batch)
                 loss.backward()
-                nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.cfg.training.gradient_clip
-                )
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.training.gradient_clip)
                 self.optimizer.step()
 
             total_loss += loss.item() * X_batch.size(0)
@@ -125,7 +123,7 @@ class Trainer:
         for p in self.model.parameters():
             if p.grad is not None:
                 grad_norm += p.grad.data.norm(2).item() ** 2
-        grad_norm = grad_norm ** 0.5
+        grad_norm = grad_norm**0.5
 
         self.scheduler.step()
         return {
@@ -169,13 +167,16 @@ class Trainer:
     def save_checkpoint(self, path: str, epoch: int, metrics: dict) -> None:
         """Save model checkpoint."""
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        torch.save({
-            "epoch": epoch,
-            "model_state_dict": self.model.state_dict(),
-            "optimizer_state_dict": self.optimizer.state_dict(),
-            "metrics": metrics,
-            "config": OmegaConf.to_container(self.cfg),
-        }, path)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "metrics": metrics,
+                "config": OmegaConf.to_container(self.cfg),
+            },
+            path,
+        )
         logger.info(f"Checkpoint saved: {path}")
 
 
@@ -236,7 +237,9 @@ def main(cfg: DictConfig) -> None:
         offset = cfg.data.preprocessing.window_size
         # create_sequences trims another (seq_length) bars from the front
         total_offset = offset + cfg.model.input.sequence_length
-        sentiment_embeddings = load_sentiment_embeddings(emb_path, n_bars=len(X), offset=total_offset)
+        sentiment_embeddings = load_sentiment_embeddings(
+            emb_path, n_bars=len(X), offset=total_offset
+        )
         logger.info(
             f"Sentiment embeddings loaded: {sentiment_embeddings.shape} "
             f"(offset={total_offset}, non-zero={np.count_nonzero(sentiment_embeddings.sum(axis=1))})"
@@ -275,8 +278,11 @@ def main(cfg: DictConfig) -> None:
         test_ds = TensorDataset(torch.FloatTensor(X_test), torch.LongTensor(y_test))
 
     train_loader = DataLoader(
-        train_ds, batch_size=cfg.training.batch_size, shuffle=True,
-        num_workers=cfg.training.num_workers, pin_memory=True,
+        train_ds,
+        batch_size=cfg.training.batch_size,
+        shuffle=True,
+        num_workers=cfg.training.num_workers,
+        pin_memory=True,
     )
     val_loader = DataLoader(val_ds, batch_size=cfg.training.batch_size)
     test_loader = DataLoader(test_ds, batch_size=cfg.training.batch_size)
@@ -295,9 +301,7 @@ def main(cfg: DictConfig) -> None:
         class_weights = class_weights / class_weights.min()
         class_weights = np.clip(class_weights, 1.0, 5.0)
         class_weights = class_weights / class_weights.sum() * len(class_weights)
-        trainer.criterion = nn.CrossEntropyLoss(
-            weight=torch.FloatTensor(class_weights).to(device)
-        )
+        trainer.criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor(class_weights).to(device))
         logger.info(
             f"Class weights: sell={class_weights[0]:.3f}, "
             f"hold={class_weights[1]:.3f}, buy={class_weights[2]:.3f}"
@@ -322,22 +326,25 @@ def main(cfg: DictConfig) -> None:
         )
 
         if wandb_run:
-            wandb.log({
-                "epoch": epoch,
-                "train/loss": train_metrics["loss"],
-                "train/accuracy": train_metrics["accuracy"],
-                "train/lr": train_metrics["lr"],
-                "train/grad_norm": train_metrics.get("grad_norm", 0),
-                "val/loss": val_metrics["loss"],
-                "val/accuracy": val_metrics["accuracy"],
-            })
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "train/loss": train_metrics["loss"],
+                    "train/accuracy": train_metrics["accuracy"],
+                    "train/lr": train_metrics["lr"],
+                    "train/grad_norm": train_metrics.get("grad_norm", 0),
+                    "val/loss": val_metrics["loss"],
+                    "val/accuracy": val_metrics["accuracy"],
+                }
+            )
 
         # Save best model
         if val_metrics["loss"] < trainer.best_val_loss:
             best_metrics = val_metrics
             trainer.save_checkpoint(
                 f"{cfg.paths.model_dir}/{cfg.model.name}_best.pt",
-                epoch, val_metrics,
+                epoch,
+                val_metrics,
             )
 
         if trainer.check_early_stopping(val_metrics["loss"]):

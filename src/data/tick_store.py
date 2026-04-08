@@ -60,10 +60,12 @@ class TickStore:
         if df.is_empty():
             return 0
 
-        df = df.with_columns([
-            pl.lit(symbol).alias("symbol"),
-            pl.lit(timeframe).alias("timeframe"),
-        ])
+        df = df.with_columns(
+            [
+                pl.lit(symbol).alias("symbol"),
+                pl.lit(timeframe).alias("timeframe"),
+            ]
+        )
 
         # Use INSERT OR IGNORE to skip duplicates
         self.conn.execute("""
@@ -119,18 +121,24 @@ class TickStore:
 
     def get_latest_timestamp(self, symbol: str, timeframe: str) -> Optional[datetime]:
         """Get the most recent timestamp in the store."""
-        result = self.conn.execute("""
+        result = self.conn.execute(
+            """
             SELECT MAX(timestamp) as max_ts
             FROM ohlcv
             WHERE symbol = ? AND timeframe = ?
-        """, [symbol, timeframe]).fetchone()
+        """,
+            [symbol, timeframe],
+        ).fetchone()
         return result[0] if result and result[0] else None
 
     def get_row_count(self, symbol: str, timeframe: str) -> int:
         """Count rows for a symbol/timeframe."""
-        result = self.conn.execute("""
+        result = self.conn.execute(
+            """
             SELECT COUNT(*) FROM ohlcv WHERE symbol = ? AND timeframe = ?
-        """, [symbol, timeframe]).fetchone()
+        """,
+            [symbol, timeframe],
+        ).fetchone()
         return result[0] if result else 0
 
     def vacuum(self) -> None:

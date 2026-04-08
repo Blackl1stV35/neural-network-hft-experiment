@@ -58,8 +58,7 @@ def generate_synthetic_data(
 
     # Generate OHLCV from close prices
     timestamps = [
-        datetime(2024, 1, 1) + timedelta(minutes=i * timeframe_minutes)
-        for i in range(n_bars)
+        datetime(2024, 1, 1) + timedelta(minutes=i * timeframe_minutes) for i in range(n_bars)
     ]
 
     # Filter out weekends
@@ -70,15 +69,17 @@ def generate_synthetic_data(
     n = len(prices)
     noise = np.abs(np.random.normal(0, 0.3, n))
 
-    df = pl.DataFrame({
-        "timestamp": timestamps,
-        "open": prices + np.random.normal(0, 0.1, n),
-        "high": prices + noise,
-        "low": prices - noise,
-        "close": prices,
-        "tick_volume": np.random.randint(50, 500, n).astype(int),
-        "spread": np.random.randint(15, 35, n).astype(int),
-    })
+    df = pl.DataFrame(
+        {
+            "timestamp": timestamps,
+            "open": prices + np.random.normal(0, 0.1, n),
+            "high": prices + noise,
+            "low": prices - noise,
+            "close": prices,
+            "tick_volume": np.random.randint(50, 500, n).astype(int),
+            "spread": np.random.randint(15, 35, n).astype(int),
+        }
+    )
 
     logger.info(
         f"Synthetic data: {len(df)} bars, "

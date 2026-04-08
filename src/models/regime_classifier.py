@@ -93,7 +93,9 @@ class RegimeClassifier:
         self.n_estimators = n_estimators
         self.feature_names: list[str] = []
 
-    def train(self, X: np.ndarray, y: np.ndarray, feature_names: Optional[list[str]] = None) -> dict:
+    def train(
+        self, X: np.ndarray, y: np.ndarray, feature_names: Optional[list[str]] = None
+    ) -> dict:
         """Train the regime classifier.
 
         Args:
@@ -120,7 +122,9 @@ class RegimeClassifier:
 
         # Cross-validation score
         cv_scores = cross_val_score(self._model, X, y, cv=5, scoring="accuracy")
-        logger.info(f"Regime classifier CV accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+        logger.info(
+            f"Regime classifier CV accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}"
+        )
 
         # Fit on full data
         self._model.fit(X, y)
@@ -129,7 +133,9 @@ class RegimeClassifier:
             "cv_accuracy_mean": float(cv_scores.mean()),
             "cv_accuracy_std": float(cv_scores.std()),
             "n_samples": len(y),
-            "class_distribution": {int(k): int(v) for k, v in zip(*np.unique(y, return_counts=True))},
+            "class_distribution": {
+                int(k): int(v) for k, v in zip(*np.unique(y, return_counts=True))
+            },
         }
 
     def predict(self, X: np.ndarray) -> np.ndarray:

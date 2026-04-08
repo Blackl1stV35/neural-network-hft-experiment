@@ -30,9 +30,7 @@ class DuelingNetwork(nn.Module):
         feat_dim = hidden_dims[-2] if len(hidden_dims) > 1 else input_dim
 
         # Value stream
-        self.value = nn.Sequential(
-            nn.Linear(feat_dim, last_dim), nn.ReLU(), nn.Linear(last_dim, 1)
-        )
+        self.value = nn.Sequential(nn.Linear(feat_dim, last_dim), nn.ReLU(), nn.Linear(last_dim, 1))
         # Advantage stream
         self.advantage = nn.Sequential(
             nn.Linear(feat_dim, last_dim), nn.ReLU(), nn.Linear(last_dim, n_actions)
@@ -146,11 +144,14 @@ class DQNAgent:
         }
 
     def save(self, path: str) -> None:
-        torch.save({
-            "q_net": self.q_net.state_dict(),
-            "target_net": self.target_net.state_dict(),
-            "train_step": self.train_step,
-        }, path)
+        torch.save(
+            {
+                "q_net": self.q_net.state_dict(),
+                "target_net": self.target_net.state_dict(),
+                "train_step": self.train_step,
+            },
+            path,
+        )
 
     def load(self, path: str) -> None:
         data = torch.load(path, map_location=self.device)

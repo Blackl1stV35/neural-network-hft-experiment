@@ -27,22 +27,21 @@ from src.utils.logger import setup_logger
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Build daily consensus sentiment embeddings"
-    )
+    parser = argparse.ArgumentParser(description="Build daily consensus sentiment embeddings")
     parser.add_argument("--data-dir", default="data", help="Data directory")
-    parser.add_argument("--cache-dir", default="data/ft_cache/processed",
-                        help="FT article cache directory")
+    parser.add_argument(
+        "--cache-dir", default="data/ft_cache/processed", help="FT article cache directory"
+    )
     parser.add_argument("--symbol", default="XAUUSD")
     parser.add_argument("--timeframe", default="M1")
-    parser.add_argument("--lookback", type=int, default=24,
-                        help="Article lookback window in hours")
-    parser.add_argument("--max-articles", type=int, default=30,
-                        help="Max articles per day for consensus")
-    parser.add_argument("--gpu", action="store_true",
-                        help="Use GPU for FinBERT inference")
-    parser.add_argument("--output", default=None,
-                        help="Output path (default: data/sentiment_embeddings.npy)")
+    parser.add_argument("--lookback", type=int, default=24, help="Article lookback window in hours")
+    parser.add_argument(
+        "--max-articles", type=int, default=30, help="Max articles per day for consensus"
+    )
+    parser.add_argument("--gpu", action="store_true", help="Use GPU for FinBERT inference")
+    parser.add_argument(
+        "--output", default=None, help="Output path (default: data/sentiment_embeddings.npy)"
+    )
     args = parser.parse_args()
 
     setup_logger()

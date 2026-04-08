@@ -19,6 +19,7 @@ from loguru import logger
 # Fallback: lightweight SSM block (pure PyTorch, no CUDA kernel dependency)
 # ---------------------------------------------------------------------------
 
+
 class SimpleSSMBlock(nn.Module):
     """Simplified selective state-space block (pure PyTorch fallback).
 
@@ -32,8 +33,7 @@ class SimpleSSMBlock(nn.Module):
 
         self.in_proj = nn.Linear(d_model, d_inner * 2, bias=False)
         self.conv1d = nn.Conv1d(
-            d_inner, d_inner, kernel_size=d_conv,
-            padding=d_conv - 1, groups=d_inner
+            d_inner, d_inner, kernel_size=d_conv, padding=d_conv - 1, groups=d_inner
         )
         self.act = nn.SiLU()
 
@@ -42,7 +42,7 @@ class SimpleSSMBlock(nn.Module):
         self.dt_proj = nn.Linear(d_inner, d_inner, bias=True)
 
         # Initialize dt bias for reasonable timescales
-        dt_init_std = d_inner ** -0.5
+        dt_init_std = d_inner**-0.5
         nn.init.uniform_(self.dt_proj.weight, -dt_init_std, dt_init_std)
         dt_bias = torch.exp(
             torch.rand(d_inner) * (math.log(0.1) - math.log(0.001)) + math.log(0.001)
@@ -113,6 +113,7 @@ class SimpleSSMBlock(nn.Module):
 # Try to use official mamba-ssm, fall back to SimpleSSMBlock
 # ---------------------------------------------------------------------------
 
+
 def _get_mamba_block(d_model: int, d_state: int, d_conv: int, expand: int):
     """Try official Mamba, fall back to SimpleSSMBlock."""
     try:
@@ -144,10 +145,9 @@ class MambaEncoder(nn.Module):
         super().__init__()
 
         self.input_proj = nn.Linear(input_dim, d_model)
-        self.layers = nn.ModuleList([
-            _get_mamba_block(d_model, d_state, d_conv, expand_factor)
-            for _ in range(n_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [_get_mamba_block(d_model, d_state, d_conv, expand_factor) for _ in range(n_layers)]
+        )
         self.dropout = nn.Dropout(dropout)
         self.norm = nn.LayerNorm(d_model)
         self.d_model = d_model
@@ -233,11 +233,14 @@ class FusionLayer(nn.Module):
             g_tick = torch.sigmoid(self.gate_tick(combined))
             g_sent = torch.sigmoid(self.gate_sent(combined))
             g_ta = torch.sigmoid(self.gate_ta(combined))
-            gated = torch.cat([
-                tick_features * g_tick,
-                sentiment_embedding * g_sent,
-                ta_features * g_ta,
-            ], dim=-1)
+            gated = torch.cat(
+                [
+                    tick_features * g_tick,
+                    sentiment_embedding * g_sent,
+                    ta_features * g_ta,
+                ],
+                dim=-1,
+            )
             return self.projection(gated)
 
 
@@ -275,11 +278,13 @@ class MambaSSMModel(nn.Module):
         layers = []
         dim_in = fusion_hidden
         for dim_out in classifier_dims:
-            layers.extend([
-                nn.Linear(dim_in, dim_out),
-                nn.GELU(),
-                nn.Dropout(classifier_dropout),
-            ])
+            layers.extend(
+                [
+                    nn.Linear(dim_in, dim_out),
+                    nn.GELU(),
+                    nn.Dropout(classifier_dropout),
+                ]
+            )
             dim_in = dim_out
         layers.append(nn.Linear(dim_in, output_dim))
         self.classifier = nn.Sequential(*layers)

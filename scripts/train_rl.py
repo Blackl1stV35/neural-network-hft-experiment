@@ -149,7 +149,11 @@ def main():
     from src.data.preprocessing import WindowMinMaxScaler
 
     close = df["close"].to_numpy()
-    features_raw = df.select(["open", "high", "low", "close", "tick_volume", "spread"]).to_numpy().astype(np.float32)
+    features_raw = (
+        df.select(["open", "high", "low", "close", "tick_volume", "spread"])
+        .to_numpy()
+        .astype(np.float32)
+    )
 
     scaler = WindowMinMaxScaler(120)
     features = scaler.transform(features_raw)[120:]  # trim warmup

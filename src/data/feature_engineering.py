@@ -81,57 +81,61 @@ def add_ta_indicators(df: pl.DataFrame, indicators: list[str]) -> pl.DataFrame:
 
 def compute_microstructure_features(df: pl.DataFrame) -> pl.DataFrame:
     """Compute tick microstructure features useful for short-term prediction."""
-    return df.with_columns([
-        # Price returns
-        (pl.col("close") / pl.col("close").shift(1) - 1).alias("return_1"),
-        (pl.col("close") / pl.col("close").shift(5) - 1).alias("return_5"),
-        (pl.col("close") / pl.col("close").shift(20) - 1).alias("return_20"),
-
-        # Candle body and wick ratios
-        ((pl.col("close") - pl.col("open")) / (pl.col("high") - pl.col("low") + 1e-8)).alias(
-            "body_ratio"
-        ),
-        ((pl.col("high") - pl.col("close").clip(pl.col("open"), None))
-         / (pl.col("high") - pl.col("low") + 1e-8)).alias("upper_wick_ratio"),
-
-        # Realized volatility (rolling)
-        (pl.col("close") / pl.col("close").shift(1) - 1)
-        .rolling_std(window_size=20)
-        .alias("volatility_20"),
-
-        # Volume features
-        (pl.col("tick_volume") / pl.col("tick_volume").rolling_mean(window_size=20)).alias(
-            "volume_ratio"
-        ),
-
-        # Spread features (normalized)
-        (pl.col("spread").cast(pl.Float64) / pl.col("close")).alias("spread_pct"),
-
-        # High-low range (normalized)
-        ((pl.col("high") - pl.col("low")) / pl.col("close")).alias("range_pct"),
-    ])
+    return df.with_columns(
+        [
+            # Price returns
+            (pl.col("close") / pl.col("close").shift(1) - 1).alias("return_1"),
+            (pl.col("close") / pl.col("close").shift(5) - 1).alias("return_5"),
+            (pl.col("close") / pl.col("close").shift(20) - 1).alias("return_20"),
+            # Candle body and wick ratios
+            ((pl.col("close") - pl.col("open")) / (pl.col("high") - pl.col("low") + 1e-8)).alias(
+                "body_ratio"
+            ),
+            (
+                (pl.col("high") - pl.col("close").clip(pl.col("open"), None))
+                / (pl.col("high") - pl.col("low") + 1e-8)
+            ).alias("upper_wick_ratio"),
+            # Realized volatility (rolling)
+            (pl.col("close") / pl.col("close").shift(1) - 1)
+            .rolling_std(window_size=20)
+            .alias("volatility_20"),
+            # Volume features
+            (pl.col("tick_volume") / pl.col("tick_volume").rolling_mean(window_size=20)).alias(
+                "volume_ratio"
+            ),
+            # Spread features (normalized)
+            (pl.col("spread").cast(pl.Float64) / pl.col("close")).alias("spread_pct"),
+            # High-low range (normalized)
+            ((pl.col("high") - pl.col("low")) / pl.col("close")).alias("range_pct"),
+        ]
+    )
 
 
 def compute_regime_features(df: pl.DataFrame) -> pl.DataFrame:
     """Compute features specifically for regime classification."""
-    return df.with_columns([
-        # Trend strength: slope of EMA over N bars
-        (pl.col("close").rolling_mean(window_size=50)
-         - pl.col("close").rolling_mean(window_size=50).shift(20)).alias("trend_strength"),
-
-        # Volatility regime
-        (pl.col("close") / pl.col("close").shift(1) - 1)
-        .rolling_std(window_size=60)
-        .alias("volatility_60"),
-
-        # Mean reversion signal: distance from rolling mean
-        ((pl.col("close") - pl.col("close").rolling_mean(window_size=50))
-         / pl.col("close").rolling_std(window_size=50)).alias("mean_reversion_z"),
-
-        # Volume profile
-        (pl.col("tick_volume").rolling_mean(window_size=20)
-         / pl.col("tick_volume").rolling_mean(window_size=100)).alias("volume_profile"),
-    ])
+    return df.with_columns(
+        [
+            # Trend strength: slope of EMA over N bars
+            (
+                pl.col("close").rolling_mean(window_size=50)
+                - pl.col("close").rolling_mean(window_size=50).shift(20)
+            ).alias("trend_strength"),
+            # Volatility regime
+            (pl.col("close") / pl.col("close").shift(1) - 1)
+            .rolling_std(window_size=60)
+            .alias("volatility_60"),
+            # Mean reversion signal: distance from rolling mean
+            (
+                (pl.col("close") - pl.col("close").rolling_mean(window_size=50))
+                / pl.col("close").rolling_std(window_size=50)
+            ).alias("mean_reversion_z"),
+            # Volume profile
+            (
+                pl.col("tick_volume").rolling_mean(window_size=20)
+                / pl.col("tick_volume").rolling_mean(window_size=100)
+            ).alias("volume_profile"),
+        ]
+    )
 
 
 def select_features(df: pl.DataFrame, feature_list: list[str]) -> np.ndarray:
