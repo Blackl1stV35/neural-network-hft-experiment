@@ -51,8 +51,11 @@ class Trainer:
             self.optimizer, T_0=10, T_mult=2
         )
 
-        # Loss with class weights for imbalanced data
+        # Loss — compute class weights from first batch or use uniform
+        # Will be overridden in main() with actual class weights
         self.criterion = nn.CrossEntropyLoss()
+
+        self._class_weights_set = False
 
         # Mixed precision
         self.use_amp = cfg.training.mixed_precision and device.type == "cuda"
@@ -117,11 +120,19 @@ class Trainer:
             correct += (preds == y_batch).sum().item()
             total += X_batch.size(0)
 
+        # Log gradient norm for NaN diagnosis
+        grad_norm = 0.0
+        for p in self.model.parameters():
+            if p.grad is not None:
+                grad_norm += p.grad.data.norm(2).item() ** 2
+        grad_norm = grad_norm ** 0.5
+
         self.scheduler.step()
         return {
             "loss": total_loss / total,
             "accuracy": correct / total,
             "lr": self.optimizer.param_groups[0]["lr"],
+            "grad_norm": grad_norm,
         }
 
     @torch.no_grad()
@@ -275,6 +286,26 @@ def main(cfg: DictConfig) -> None:
 
     # Train
     trainer = Trainer(cfg, model, device, use_sentiment=use_sentiment)
+
+    # Compute class weights to handle imbalanced labeling
+    class_counts = np.bincount(y_train, minlength=3)
+    if class_counts.min() > 0:
+        # Inverse frequency weighting, normalized
+        class_weights = 1.0 / class_counts.astype(np.float32)
+        class_weights = class_weights / class_weights.sum() * len(class_weights)
+        trainer.criterion = nn.CrossEntropyLoss(
+            weight=torch.FloatTensor(class_weights).to(device)
+        )
+        logger.info(
+            f"Class weights: sell={class_weights[0]:.3f}, "
+            f"hold={class_weights[1]:.3f}, buy={class_weights[2]:.3f}"
+        )
+    else:
+        logger.warning(
+            f"At least one class has zero samples: {class_counts}. "
+            f"Consider adjusting labeling parameters (widen barriers or extend max_hold)."
+        )
+
     best_metrics = {}
 
     for epoch in range(1, cfg.training.epochs + 1):
@@ -284,7 +315,8 @@ def main(cfg: DictConfig) -> None:
         logger.info(
             f"Epoch {epoch}/{cfg.training.epochs} | "
             f"Train Loss: {train_metrics['loss']:.4f} Acc: {train_metrics['accuracy']:.4f} | "
-            f"Val Loss: {val_metrics['loss']:.4f} Acc: {val_metrics['accuracy']:.4f}"
+            f"Val Loss: {val_metrics['loss']:.4f} Acc: {val_metrics['accuracy']:.4f} | "
+            f"GradNorm: {train_metrics.get('grad_norm', 0):.2f}"
         )
 
         if wandb_run:
@@ -293,6 +325,7 @@ def main(cfg: DictConfig) -> None:
                 "train/loss": train_metrics["loss"],
                 "train/accuracy": train_metrics["accuracy"],
                 "train/lr": train_metrics["lr"],
+                "train/grad_norm": train_metrics.get("grad_norm", 0),
                 "val/loss": val_metrics["loss"],
                 "val/accuracy": val_metrics["accuracy"],
             })

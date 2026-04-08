@@ -36,68 +36,26 @@ NS_IMAGE = "{http://www.google.com/schemas/sitemap-image/1.1}"
 
 # Gold/macro keywords for filtering relevant articles
 GOLD_MACRO_KEYWORDS = [
-    # ==================== CORE GOLD & XAUUSD TERMS ====================
-    "XAUUSD", "XAU/USD", "xau", "gold", "spot gold", "gold price", "gold prices",
-    "gold futures", "GC futures", "COMEX gold", "COMEX GC", "gold spot",
-    "gold bullion", "bullion", "bullion price", "LBMA gold", "gold fixing",
-    "precious metal", "precious metals",
-
-    # ==================== GOLD MARKET MOVEMENT ====================
-    "gold rally", "gold surges", "gold climbs", "gold rises", "gold jumps",
-    "gold hits", "gold record high", "all-time high gold", "gold decline",
-    "gold drops", "gold falls", "gold plunges", "gold correction", "gold breakout",
-
-    # ==================== ANALYSIS & FORECAST ====================
-    "gold forecast", "gold outlook", "gold prediction", "gold technical analysis",
-    "gold fundamental analysis", "gold market update", "gold price today",
-    "gold price forecast", "gold news", "gold market report", "gold price movement",
-
-    # ==================== MONETARY POLICY & CENTRAL BANKS ====================
-    "federal reserve", "fed", "powell", "fomc", "ecb", "boj", "bank of japan",
-    "pboc", "people's bank of china", "central bank gold", "central bank gold buying",
-    "central banks buying gold", "gold reserve", "gold buying", "gold demand",
-    "gold accumulation", "gold purchases",
-
-    # ==================== INTEREST RATES & YIELDS ====================
-    "rate cut", "rate hike", "rate decision", "interest rates gold",
-    "monetary policy", "quantitative easing", "quantitative tightening",
-    "qe", "qt", "bond yield", "treasury yield", "10-year yield",
-    "real yield", "breakeven inflation",
-
-    # ==================== INFLATION & ECONOMIC DATA ====================
-    "inflation", "inflation hedge", "cpi", "ppi", "nonfarm payroll",
-    "nonfarm payrolls", "nfp", "unemployment", "gdp", "pmi",
-    "consumer confidence", "retail sales", "economic data", "recession",
-    "recession fears",
-
-    # ==================== DOLLAR & FX CORRELATION ====================
-    "dollar index", "dxy", "dollar strength", "dollar weakness", "usd",
-    "usd strength gold", "usd weakness gold", "gold dollar correlation",
-
-    # ==================== SAFE HAVEN & GEOPOLITICAL ====================
-    "safe haven", "safe-haven demand", "geopolitical risk", "geopolitical tension",
-    "middle east tension", "trade war", "tariff", "war premium gold",
-    "risk-off gold",
-
-    # ==================== GOLD TRADING & TECHNICALS ====================
-    "gold open interest", "gold futures volume", "gold volatility",
-    "gold support level", "gold resistance", "gold contango", "gold backwardation",
-
-    # ==================== GOLD ETFs & FLOWS ====================
-    "gold etf", "gold etf inflow", "gold etf flows", "gold etf holdings",
-    "gld etf", "gdx etf",
-
-    # ==================== MINING & COMPANIES ====================
-    "barrick", "newmont", "newmont mining", "gold mining stocks",
-    "gold producers", "goldman sachs", "goldman gold",
-
-    # ==================== PHYSICAL vs PAPER & OTHER HIGH SIGNAL ====================
-    "physical gold", "paper gold", "gold supply", "gold demand",
-    "gold rush", "gold standard", "gold benchmark", "kitco gold",
-
-    # ==================== REGIONAL DEMAND ====================
-    "china gold buying", "india gold demand", "russia gold reserves",
-    "brics gold"
+    # Direct gold
+    "gold", "xauusd", "bullion", "precious metal",
+    # Central banks / monetary policy
+    "federal reserve", "fomc", "interest rate", "rate decision", "rate cut",
+    "rate hike", "monetary policy", "quantitative", "tightening", "easing",
+    "central bank", "ecb", "boj", "pboc",
+    # Inflation / yields
+    "inflation", "cpi", "ppi", "treasury yield", "bond yield", "real yield",
+    "deflation", "stagflation",
+    # Dollar / FX
+    "dollar index", "dxy", "dollar strength", "dollar weakness",
+    "currency", "forex", "usd",
+    # Geopolitical / safe haven
+    "safe haven", "geopolitical", "war", "conflict", "sanctions",
+    "trade war", "tariff",
+    # Economic indicators
+    "nonfarm", "payroll", "unemployment", "gdp", "retail sales",
+    "manufacturing", "pmi", "consumer confidence",
+    # Commodities context
+    "commodity", "oil price", "silver", "copper",
 ]
 
 # Compile keyword patterns for fast matching

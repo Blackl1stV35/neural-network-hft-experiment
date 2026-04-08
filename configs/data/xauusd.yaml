@@ -53,8 +53,8 @@ sentiment:
 
 labeling:
   method: triple_barrier
-  profit_target_pips: 40
-  stop_loss_pips: 20
-  max_holding_minutes: 300
-  pip_value: 0.10  # XAUUSD: 1 pip = $0.10 price movement
+  profit_target_pips: 100    # $10.00 at pip_value=0.10 — realistic for gold
+  stop_loss_pips: 50         # $5.00 — 2:1 risk/reward ratio
+  max_holding_minutes: 1380  # 23h = full MT5 XAUUSD session (HITL manages exit risk)
+  pip_value: 0.10            # XAUUSD: 1 pip = $0.10 price movement
   classes: [sell, hold, buy]  # mapped to [0, 1, 2]

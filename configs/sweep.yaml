@@ -1,0 +1,190 @@
+# W&B Sweep Configuration for XAUUSD Trading Models
+# ===================================================
+#
+# Usage:
+#   wandb sweep configs/sweep.yaml
+#   wandb agent <sweep_id>
+#
+# This sweep addresses the critical issues found in the 8-Apr experiment:
+#   1. Near-zero hold class (101/330k) → labeling parameters need widening
+#   2. ~60% accuracy ≈ majority-class baseline → model not learning signal
+#   3. Mamba NaN losses → numerical stability
+#   4. Val loss diverging by epoch 10 → overfitting
+#   5. Backtest PF <1 with >100% drawdown → no edge
+
+program: scripts/train.py
+method: bayes  # bayesian optimization (better than grid/random for expensive runs)
+metric:
+  name: val/loss
+  goal: minimize
+
+# Early termination: kill runs that aren't improving
+early_terminate:
+  type: hyperband
+  min_iter: 8        # minimum epochs before killing
+  eta: 2             # halving rate
+  max_iter: 60       # max epochs for best runs
+
+parameters:
+  # ============================================================
+  # LABELING — the #1 problem
+  # ============================================================
+  # Current: 40/20/300 with pip_value=0.10 → barriers at $4/$2
+  # Result: [205647, 101, 124007] = 0.03% hold
+  #
+  # XAUUSD M1 volatility: ~$0.50-2.00 per bar, $5-15 per hour
+  # Over 300 bars (5h): gold almost always moves >$2 one way
+  #
+  # Fix: wider barriers OR longer hold time OR both
+  # Target: ~20-30% per class (balanced enough for the model to learn)
+  #
+  # With HITL exits enabled, max_holding can extend to full session
+  # XAUUSD MT5 session: ~23h/day (01:00–00:00 UTC)
+  # 23h × 60 = 1380 M1 bars
+
+  data.labeling.profit_target_pips:
+    distribution: categorical
+    values: [60, 80, 100, 120]
+    # $6, $8, $10, $12 with pip_value=0.10
+    # Need wider to generate more holds
+
+  data.labeling.stop_loss_pips:
+    distribution: categorical
+    values: [30, 40, 50, 60]
+    # $3, $4, $5, $6 — symmetric or slightly asymmetric with profit
+
+  data.labeling.max_holding_minutes:
+    distribution: categorical
+    values: [300, 480, 720, 1380]
+    # 5h, 8h, 12h, 23h (full MT5 session)
+    # Longer hold = more holds before barrier hit = better class balance
+    # HITL human approval handles exit risk on long holds
+
+  data.labeling.pip_value:
+    value: 0.10  # fixed — this is the correct XAUUSD pip value
+
+  # ============================================================
+  # MODEL ARCHITECTURE
+  # ============================================================
+  model.type:
+    distribution: categorical
+    values: [cnn_lstm, mamba_ssm]
+
+  # Shared classifier head
+  model.classifier.dropout:
+    distribution: uniform
+    min: 0.2
+    max: 0.5
+
+  # Sequence length — linked to model type but sweep independently
+  model.input.sequence_length:
+    distribution: categorical
+    values: [60, 120, 240, 480]
+    # 1h, 2h, 4h, 8h of M1 data
+
+  # CNN-LSTM specific (ignored when model.type=mamba_ssm)
+  model.lstm.hidden_size:
+    distribution: categorical
+    values: [64, 128, 256]
+
+  model.lstm.num_layers:
+    distribution: categorical
+    values: [1, 2, 3]
+
+  model.lstm.dropout:
+    distribution: uniform
+    min: 0.1
+    max: 0.5
+
+  # Mamba specific (ignored when model.type=cnn_lstm)
+  model.mamba.d_model:
+    distribution: categorical
+    values: [64, 128, 256]
+
+  model.mamba.n_layers:
+    distribution: categorical
+    values: [2, 4, 6]
+
+  model.mamba.d_state:
+    distribution: categorical
+    values: [8, 16, 32]
+
+  model.mamba.dropout:
+    distribution: uniform
+    min: 0.05
+    max: 0.3
+
+  # Fusion (for Mamba with sentiment)
+  model.fusion.hidden_dim:
+    distribution: categorical
+    values: [128, 256, 512]
+
+  # ============================================================
+  # TRAINING
+  # ============================================================
+  training.learning_rate:
+    distribution: log_uniform_values
+    min: 0.00003
+    max: 0.001
+    # Current 0.0001 may be too low for Mamba (NaN issue)
+    # Higher LR with gradient clip can help stability
+
+  training.weight_decay:
+    distribution: log_uniform_values
+    min: 0.000001
+    max: 0.001
+
+  training.batch_size:
+    distribution: categorical
+    values: [128, 256, 512]
+
+  training.gradient_clip:
+    distribution: categorical
+    values: [0.5, 1.0, 2.0]
+
+  training.epochs:
+    value: 60  # let early stopping handle it
+
+  training.early_stopping_patience:
+    distribution: categorical
+    values: [10, 15, 20]
+
+  training.mixed_precision:
+    value: false  # keep off for Mamba stability
+
+  # ============================================================
+  # DATA
+  # ============================================================
+  data.preprocessing.window_size:
+    distribution: categorical
+    values: [60, 120, 240]
+
+  data.preprocessing.scaling:
+    distribution: categorical
+    values: [window_minmax, zscore]
+
+  # Sentiment
+  data.sentiment.enabled:
+    distribution: categorical
+    values: [true, false]
+    # Test whether sentiment helps or hurts — only 10% coverage
+
+  # ============================================================
+  # FIXED PARAMETERS
+  # ============================================================
+  data.name:
+    value: xauusd
+  data.symbol:
+    value: XAUUSD
+  data.timeframe:
+    value: M1
+  project.seed:
+    value: 42
+  project.device:
+    value: auto
+  training.num_workers:
+    value: 4
+  training.val_split:
+    value: 0.15
+  training.test_split:
+    value: 0.10
