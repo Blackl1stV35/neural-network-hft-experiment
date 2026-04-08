@@ -1,14 +1,24 @@
+# configs/config.yaml
+# Base Hydra configuration for XAUUSD trading experiments
+
 defaults:
-  - model: cnn_lstm
+  - model: mamba_ssm   
   - rl: sac
   - data: xauusd
   - _self_
 
+
+# ============================================================
+# PROJECT SETTINGS
+# ============================================================
 project:
   name: xauusd-trading
   seed: 42
   device: auto  # auto | cpu | cuda
 
+# ============================================================
+# TRAINING
+# ============================================================
 training:
   epochs: 100
   batch_size: 256
@@ -21,12 +31,18 @@ training:
   val_split: 0.15
   test_split: 0.10
 
+# ============================================================
+# LOGGING
+# ============================================================
 logging:
   wandb_project: xauusd-trading
   wandb_entity: null
   log_every_n_steps: 50
   save_top_k: 3
 
+# ============================================================
+# PATHS
+# ============================================================
 paths:
   data_dir: data
   model_dir: models
