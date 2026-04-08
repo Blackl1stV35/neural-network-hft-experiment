@@ -12,6 +12,12 @@
 #   4. Val loss diverging by epoch 10 → overfitting
 #   5. Backtest PF <1 with >100% drawdown → no edge
 
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
+
 program: scripts/train.py
 method: bayes  # bayesian optimization (better than grid/random for expensive runs)
 metric:
