@@ -1,3 +1,4 @@
+# configs/model/cnn_lstm.yaml
 name: cnn_lstm
 type: cnn_lstm
 
@@ -18,11 +19,17 @@ attention:
   heads: 4
   dim: 128
 
+fusion:
+  method: concat_project   # stub so sweeps can override
+  hidden_dim: 256
+  sentiment_dim: 768
+  ta_dim: 12
+
 classifier:
   hidden_dims: [64, 32]
-  output_dim: 3  # buy, hold, sell
+  output_dim: 3   # buy, hold, sell
   dropout: 0.3
 
 input:
-  sequence_length: 120  # 120 M1 candles = 2 hours
-  feature_dim: 6  # OHLCV + spread
+  sequence_length: 120     # 120 M1 candles = 2 hours
+  feature_dim: 6           # OHLCV + spread
